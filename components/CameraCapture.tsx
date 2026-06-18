@@ -134,6 +134,7 @@ export default function CameraCapture({
   const [mode, setMode] = useState<'idle' | 'camera' | 'file'>('idle')
   const [cameraError, setCameraError] = useState(false)
   const [flash, setFlash] = useState(false)
+  const [videoReady, setVideoReady] = useState(false)
 
   const lcdW = compact ? 180 : 240
   const lcdH = compact ? 210 : 280
@@ -142,27 +143,74 @@ export default function CameraCapture({
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
   }, [])
 
   useEffect(() => () => stopCamera(), [stopCamera])
 
   const startCamera = useCallback(async () => {
     setCameraError(false)
+    stopCamera()
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(true)
+      setMode('file')
+      return
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', aspectRatio: CAPTURE_W / CAPTURE_H },
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: CAPTURE_W },
+            height: { ideal: CAPTURE_H },
+          },
+          audio: false,
+        })
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false,
+        })
       }
+      streamRef.current = stream
       setMode('camera')
     } catch {
       setCameraError(true)
       setMode('file')
     }
-  }, [])
+  }, [stopCamera])
+
+  // Video mounts only after mode === 'camera' — attach stream once the element exists.
+  useEffect(() => {
+    if (mode !== 'camera') {
+      setVideoReady(false)
+      return
+    }
+    const video = videoRef.current
+    const stream = streamRef.current
+    if (!video || !stream) return
+
+    const onReady = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) setVideoReady(true)
+    }
+
+    video.srcObject = stream
+    video.addEventListener('loadedmetadata', onReady)
+    void video.play().then(onReady).catch(() => {
+      setCameraError(true)
+      setMode('file')
+      stopCamera()
+    })
+
+    return () => {
+      video.removeEventListener('loadedmetadata', onReady)
+    }
+  }, [mode, stopCamera])
 
   useEffect(() => {
     if (autoStart && !capturedUrl && mode === 'idle') {
@@ -170,10 +218,21 @@ export default function CameraCapture({
     }
   }, [autoStart, capturedUrl, mode, startCamera])
 
+  useEffect(() => {
+    if (!autoStart && mode === 'camera') {
+      stopCamera()
+      if (!capturedUrl) setMode('idle')
+    }
+  }, [autoStart, mode, capturedUrl, stopCamera])
+
   function capture() {
     const video = videoRef.current
     const canvas = canvasRef.current
-    if (!video || !canvas) return
+    if (!video || !canvas || !videoReady) return
+
+    const vw = video.videoWidth
+    const vh = video.videoHeight
+    if (!vw || !vh) return
 
     playShutterSound()
     setFlash(true)
@@ -184,8 +243,6 @@ export default function CameraCapture({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const vw = video.videoWidth
-    const vh = video.videoHeight
     const targetRatio = CAPTURE_W / CAPTURE_H
     const srcRatio = vw / vh
 
@@ -494,7 +551,7 @@ export default function CameraCapture({
                 data-sound-shutter
                 aria-label="Take photo"
                 onClick={captureAction}
-                disabled={Boolean(capturedUrl)}
+                disabled={Boolean(capturedUrl) || (mode === 'camera' && !videoReady)}
                 style={{
                   width: 64,
                   height: 64,

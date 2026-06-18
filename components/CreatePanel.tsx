@@ -6,6 +6,7 @@ import CameraCapture from './CameraCapture'
 import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
 import { CARD_BORDER, CARD_H, CARD_W, CARD_SHADOW, cardRadiusAtScale } from '@/lib/cardConstants'
+import { getOrCreateDeviceToken, getStoredMyCitizenId } from '@/lib/deviceAuth'
 import { createEphemeralCitizen, isEphemeralMode } from '@/lib/ephemeralCitizen'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
@@ -169,6 +170,8 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
           name: name.trim(),
           photoUrl,
           relationToTomo,
+          deviceToken: getOrCreateDeviceToken(),
+          previousCitizenId: getStoredMyCitizenId(),
         }),
       })
 
@@ -220,6 +223,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
           >
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <div
+                className="id-surface"
                 style={{
                   width: SPOTLIGHT_W,
                   height: cardH,

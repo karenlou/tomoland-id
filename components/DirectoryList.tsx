@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { isEphemeralMode } from '@/lib/ephemeralCitizen'
 import {
-  clearStoredMyCitizenId,
+  clearMyCitizen,
+  getOrCreateDeviceToken,
   getStoredMyCitizenId,
-  setStoredMyCitizenId,
-} from '@/lib/myCitizen'
+  setMyCitizen,
+} from '@/lib/deviceAuth'
 import SearchBar from './SearchBar'
 import RightPanel, { type RightPanelMode } from './RightPanel'
 import RetroScrollArea from './RetroScrollArea'
@@ -205,12 +206,48 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const pointerRef = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
-    const stored = getStoredMyCitizenId()
-    if (!stored) return
-    if (initialCitizens.some((c) => c.id === stored)) {
-      setMyCitizenId(stored)
-    } else {
-      clearStoredMyCitizenId()
+    let cancelled = false
+
+    async function restoreOwnership() {
+      const token = getOrCreateDeviceToken()
+      const stored = getStoredMyCitizenId()
+
+      if (stored && initialCitizens.some((c) => c.id === stored)) {
+        if (!cancelled) setMyCitizenId(stored)
+        return
+      }
+
+      if (!token || isEphemeralMode()) {
+        if (stored && !cancelled) clearMyCitizen()
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/citizens/me?token=${encodeURIComponent(token)}`)
+        if (!res.ok) return
+        const json = (await res.json()) as { citizen: Citizen | null }
+        if (cancelled) return
+
+        if (json.citizen) {
+          setMyCitizenId(json.citizen.id)
+          setMyCitizen(json.citizen.id)
+          setCitizens((prev) =>
+            prev.some((c) => c.id === json.citizen!.id)
+              ? prev
+              : [json.citizen!, ...prev],
+          )
+        } else {
+          setMyCitizenId(null)
+          clearMyCitizen()
+        }
+      } catch {
+        // Offline or transient — keep any stored id for this session
+      }
+    }
+
+    void restoreOwnership()
+    return () => {
+      cancelled = true
     }
   }, [initialCitizens])
 
@@ -241,7 +278,8 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'citizens' },
         (payload) => {
-          setCitizens((prev) => [payload.new as Citizen, ...prev])
+          const row = payload.new as Citizen
+          setCitizens((prev) => [row, ...prev])
         },
       )
       .subscribe()
@@ -262,6 +300,8 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
   const handleIssue = useCallback((citizen: Citizen) => {
     setPrintingCitizen(citizen)
+    setMyCitizenId(citizen.id)
+    setMyCitizen(citizen.id)
     setPanelMode('print')
   }, [])
 
@@ -275,7 +315,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       })
       setHoveredId(printingCitizen.id)
       setMyCitizenId(printingCitizen.id)
-      setStoredMyCitizenId(printingCitizen.id)
+      setMyCitizen(printingCitizen.id)
       setJustGrew(true)
       setTimeout(() => setJustGrew(false), 900)
     }
@@ -299,9 +339,12 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     if (!confirm('Delete your Tomoland ID? This cannot be undone.')) return
 
     const idToRemove = myCitizenId
+    const token = getOrCreateDeviceToken()
 
     try {
-      const res = await fetch(`/api/citizens?id=${encodeURIComponent(idToRemove)}`, {
+      const params = new URLSearchParams({ id: idToRemove })
+      if (token) params.set('token', token)
+      const res = await fetch(`/api/citizens?${params.toString()}`, {
         method: 'DELETE',
       })
       if (!res.ok) {
@@ -320,7 +363,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       return next
     })
     setMyCitizenId(null)
-    clearStoredMyCitizenId()
+    clearMyCitizen()
     setPanelMode('view')
   }, [myCitizenId])
 

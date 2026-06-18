@@ -42,6 +42,7 @@ export default function CitizenCard({ citizen, preview }: CitizenCardProps) {
 
   return (
     <div
+      className="id-surface"
       style={{
         position: 'relative',
         width: W,
@@ -309,6 +310,7 @@ export function CitizenCardBack({
 }) {
   return (
     <div
+      className="id-surface"
       style={{
         position: 'relative',
         width: W,

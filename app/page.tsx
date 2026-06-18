@@ -13,7 +13,9 @@ async function getCitizens(): Promise<Citizen[]> {
   const supabase = createClient(url, key)
   const { data } = await supabase
     .from('citizens')
-    .select('*')
+    .select(
+      'id, citizen_number, name, relation_to_tomo, place_of_issue, photo_url, created_at, tomoland_id',
+    )
     .order('created_at', { ascending: false })
     .limit(200)
 

@@ -127,7 +127,7 @@ export default function FlippableId({
   }
 
   return (
-    <div style={{ perspective: 1100, perspectiveOrigin: '50% 45%' }}>
+    <div className="id-surface" style={{ perspective: 1100, perspectiveOrigin: '50% 45%' }}>
       <div
         ref={ref}
         onMouseMove={onMove}

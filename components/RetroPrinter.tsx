@@ -115,7 +115,7 @@ export default function RetroPrinter({ citizen, onComplete }: RetroPrinterProps)
 
   const cardUnit = (
     <div
-      className="retro-print-unified-card"
+      className="id-surface retro-print-unified-card"
       style={{
         width: SPOTLIGHT_W,
         height: SPOTLIGHT_H,

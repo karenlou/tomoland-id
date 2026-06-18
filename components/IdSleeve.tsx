@@ -37,7 +37,7 @@ export function IdSleeveShell({
 
   return (
     <div
-      className={className}
+      className={className ? `id-surface ${className}` : 'id-surface'}
       style={{
         position: 'relative',
         width: cardWidth + padX * 2,
@@ -123,7 +123,7 @@ export default function IdSleeve({
       transparent 65%)`
 
   return (
-    <div style={{ perspective: 1100, perspectiveOrigin: '50% 45%' }}>
+    <div className="id-surface" style={{ perspective: 1100, perspectiveOrigin: '50% 45%' }}>
       <div
         ref={ref}
         onMouseMove={onMove}
