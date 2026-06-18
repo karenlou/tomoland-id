@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { isEphemeralMode } from '@/lib/ephemeralCitizen'
+import {
+  clearStoredMyCitizenId,
+  getStoredMyCitizenId,
+  setStoredMyCitizenId,
+} from '@/lib/myCitizen'
 import SearchBar from './SearchBar'
 import RightPanel, { type RightPanelMode } from './RightPanel'
 import RetroScrollArea from './RetroScrollArea'
@@ -199,6 +204,16 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [justGrew, setJustGrew] = useState(false)
   const pointerRef = useRef({ x: 0, y: 0 })
 
+  useEffect(() => {
+    const stored = getStoredMyCitizenId()
+    if (!stored) return
+    if (initialCitizens.some((c) => c.id === stored)) {
+      setMyCitizenId(stored)
+    } else {
+      clearStoredMyCitizenId()
+    }
+  }, [initialCitizens])
+
   const selectCitizen = useCallback((id: string, playSound = true) => {
     setHoveredId((prev) => {
       if (prev !== id && playSound) playClickSound()
@@ -260,6 +275,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       })
       setHoveredId(printingCitizen.id)
       setMyCitizenId(printingCitizen.id)
+      setStoredMyCitizenId(printingCitizen.id)
       setJustGrew(true)
       setTimeout(() => setJustGrew(false), 900)
     }
@@ -306,6 +322,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       return next
     })
     setMyCitizenId(null)
+    clearStoredMyCitizenId()
     setPanelMode('view')
   }, [myCitizenId])
 
