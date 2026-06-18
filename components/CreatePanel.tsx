@@ -33,7 +33,7 @@ function StepProgress({ step }: { step: CreateStep }) {
             width: 8,
             height: 8,
             border: '1.5px solid var(--color-border)',
-            background: i < currentIdx ? 'var(--color-ink)' : 'transparent',
+            background: i <= currentIdx ? 'var(--color-ink)' : 'transparent',
             boxSizing: 'border-box',
             transition: 'background 0.25s ease',
           }}
