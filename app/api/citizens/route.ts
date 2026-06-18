@@ -79,10 +79,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Citizen id is required.' }, { status: 400 })
   }
 
-  if (EPHEMERAL) {
-    return NextResponse.json({ ok: true })
-  }
-
   const supabase = createServiceClient()
   const { error } = await supabase.from('citizens').delete().eq('id', id)
 

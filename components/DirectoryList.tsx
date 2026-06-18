@@ -300,20 +300,18 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
     const idToRemove = myCitizenId
 
-    if (!isEphemeralMode()) {
-      try {
-        const res = await fetch(`/api/citizens?id=${encodeURIComponent(idToRemove)}`, {
-          method: 'DELETE',
-        })
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}))
-          alert(json.error ?? 'Failed to delete your ID.')
-          return
-        }
-      } catch {
-        alert('Failed to delete your ID.')
+    try {
+      const res = await fetch(`/api/citizens?id=${encodeURIComponent(idToRemove)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        alert(json.error ?? 'Failed to delete your ID.')
         return
       }
+    } catch {
+      alert('Failed to delete your ID.')
+      return
     }
 
     setCitizens((prev) => {
