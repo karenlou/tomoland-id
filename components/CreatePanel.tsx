@@ -7,7 +7,6 @@ import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
 import { CARD_BORDER, CARD_H, CARD_W, CARD_SHADOW, cardRadiusAtScale } from '@/lib/cardConstants'
 import { getOrCreateDeviceToken, getStoredMyCitizenId } from '@/lib/deviceAuth'
-import { createEphemeralCitizen, isEphemeralMode } from '@/lib/ephemeralCitizen'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
 
@@ -48,9 +47,9 @@ interface CreatePanelProps {
   onIssue: (citizen: Citizen) => void
 }
 
-const PREVIEW_GAP = 20
-const FORM_STEP_MIN_H = 280
-const STEP_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
+const PREVIEW_CONTENT_GAP = 10
+const PROGRESS_FOOTER_H = 28
+const STEP_ZONE_H = 300
 
 export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
   const [step, setStep] = useState<CreateStep>('name')
@@ -77,8 +76,6 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
 
   const cardH = Math.round(CARD_H * SCALE)
   const cardRadius = cardRadiusAtScale(SCALE)
-  const previewHidden =
-    step === 'role' || step === 'photo' || (step === 'name' && previewCollapsed)
 
   const previewCitizen = {
     name: name || undefined,
@@ -138,12 +135,6 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
     setSubmitting(true)
 
     try {
-      if (isEphemeralMode()) {
-        const citizen = createEphemeralCitizen(name, photoPreviewUrl, relationToTomo ?? undefined)
-        onIssue(citizen)
-        return
-      }
-
       let photoUrl: string | null = photoPreviewUrl
 
       if (photoBlob) {
@@ -185,8 +176,38 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
     }
   }
 
-  const previewReserve =
-    step === 'submit' || (step === 'name' && !previewCollapsed) ? cardH + PREVIEW_GAP : 0
+  const hasPreview =
+    step === 'submit' || (step === 'name' && !previewCollapsed)
+
+  const shellHeight =
+    cardH + PREVIEW_CONTENT_GAP + STEP_ZONE_H + PROGRESS_FOOTER_H
+
+  const previewCard = (
+    <div style={{ display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+      <div
+        className="id-surface"
+        style={{
+          width: SPOTLIGHT_W,
+          height: cardH,
+          overflow: 'hidden',
+          borderRadius: cardRadius,
+          border: CARD_BORDER,
+          boxShadow: CARD_SHADOW,
+        }}
+      >
+        <div
+          style={{
+            transform: `scale(${SCALE})`,
+            transformOrigin: 'top left',
+            width: CARD_W,
+            height: CARD_H,
+          }}
+        >
+          <CitizenCard citizen={previewCitizen} preview />
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div
@@ -198,219 +219,182 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
         maxWidth: '100%',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
         <div
           style={{
             width: SPOTLIGHT_W,
+            position: 'relative',
+            height: shellHeight,
+            flexShrink: 0,
+            overflow: 'visible',
             display: 'flex',
             flexDirection: 'column',
-            gap: 14,
-            position: 'relative',
           }}
         >
-          {/* Preview floats above the form — padding animates so the form eases up in sync */}
           <div
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              opacity: previewHidden ? 0 : 1,
-              transform: previewHidden ? 'translateY(-12px) scale(0.98)' : 'translateY(0) scale(1)',
-              pointerEvents: previewHidden ? 'none' : 'auto',
-              transition: `opacity 0.42s ${STEP_EASE}, transform 0.42s ${STEP_EASE}`,
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              overflow: 'visible',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: hasPreview ? PREVIEW_CONTENT_GAP : 14,
+              }}
+            >
+              {hasPreview && previewCard}
+
               <div
-                className="id-surface"
+                key={`${step}-${stepDirection}`}
+                className={stepAnimClass}
                 style={{
-                  width: SPOTLIGHT_W,
-                  height: cardH,
-                  overflow: 'hidden',
-                  borderRadius: cardRadius,
-                  border: CARD_BORDER,
-                  boxShadow: CARD_SHADOW,
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 14,
                 }}
               >
-                <div
-                  style={{
-                    transform: `scale(${SCALE})`,
-                    transformOrigin: 'top left',
-                    width: CARD_W,
-                    height: CARD_H,
+            {step === 'name' && (
+              <>
+                <p style={promptStyle}>What&apos;s your name?</p>
+                <input
+                  id="create-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  maxLength={60}
+                  autoFocus
+                  style={inputStyle}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      playClickSound()
+                      goToRole()
+                    }
                   }}
+                />
+              </>
+            )}
+
+            {step === 'role' && (
+              <>
+                <p style={promptStyle}>What&apos;s your relationship to Tomo?</p>
+                <RoleSlotMachine onResolved={setRelationToTomo} onSpinChange={setRoleSpinning} />
+              </>
+            )}
+
+            {step === 'photo' && (
+              <>
+                <p style={promptStyle}>Say cheese!</p>
+                <CameraCapture
+                  onCapture={handleCapture}
+                  onClear={handleClear}
+                  capturedUrl={photoPreviewUrl}
+                  compact
+                  autoStart
+                />
+              </>
+            )}
+
+            {step === 'submit' && <p style={promptStyle}>Does everything look good?</p>}
+
+            {error && (
+              <p
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 14,
+                  color: 'var(--color-error)',
+                  margin: 0,
+                }}
+              >
+                {error}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              {step === 'name' ? (
+                <button type="button" onClick={onCancel} style={secondaryBtnStyle}>
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null)
+                    const prev = STEP_ORDER[STEP_ORDER.indexOf(step) - 1]
+                    if (prev === 'name') setPreviewCollapsed(false)
+                    changeStep(prev)
+                  }}
+                  style={secondaryBtnStyle}
                 >
-                  <CitizenCard citizen={previewCitizen} preview />
-                </div>
+                  Back
+                </button>
+              )}
+
+              {step === 'name' && (
+                <button type="button" onClick={goToRole} style={primaryBtnStyle(false)}>
+                  Next
+                </button>
+              )}
+
+              {step === 'role' && (
+                <button
+                  type="button"
+                  onClick={goToPhoto}
+                  disabled={!relationToTomo || roleSpinning}
+                  style={primaryBtnStyle(!relationToTomo || roleSpinning)}
+                >
+                  Next
+                </button>
+              )}
+
+              {step === 'photo' && (
+                <button
+                  type="button"
+                  onClick={goToSubmit}
+                  disabled={!photoBlob && !photoPreviewUrl}
+                  style={primaryBtnStyle(!photoBlob && !photoPreviewUrl)}
+                >
+                  Next
+                </button>
+              )}
+
+              {step === 'submit' && (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  style={primaryBtnStyle(submitting)}
+                >
+                  {submitting ? 'Issuing…' : 'Issue my ID'}
+                </button>
+              )}
+            </div>
               </div>
             </div>
           </div>
 
-          <div
-            style={{
-              paddingTop: previewReserve,
-              transition: `padding-top 0.42s ${STEP_EASE}`,
-            }}
-          >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'baseline',
-              gap: 12,
-            }}
-          >
-            <h2
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 22,
-                fontWeight: 'var(--weight-bold)',
-                color: 'var(--color-ink)',
-                margin: 0,
-              }}
-            >
-              ID Registration
-            </h2>
-            <StepProgress step={step} />
-          </div>
-
-          <div
-            key={`${step}-${stepDirection}`}
-            className={stepAnimClass}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 14,
-              minHeight:
-                step === 'photo'
-                  ? 320
-                  : step === 'role' || step === 'name'
-                    ? FORM_STEP_MIN_H
-                    : step === 'submit'
-                      ? 48
-                      : undefined,
-            }}
-          >
-          {step === 'name' && (
-            <>
-              <p style={promptStyle}>What&apos;s your name?</p>
-              <input
-                id="create-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                maxLength={60}
-                autoFocus
-                style={inputStyle}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    playClickSound()
-                    goToRole()
-                  }
-                }}
-              />
-            </>
-          )}
-
-          {step === 'role' && (
-            <>
-              <p style={promptStyle}>What&apos;s your relationship to Tomo?</p>
-              <RoleSlotMachine onResolved={setRelationToTomo} onSpinChange={setRoleSpinning} />
-            </>
-          )}
-
-          {step === 'photo' && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 14,
-              }}
-            >
-              <p style={promptStyle}>Say cheese!</p>
-              <CameraCapture
-                onCapture={handleCapture}
-                onClear={handleClear}
-                capturedUrl={photoPreviewUrl}
-                compact
-                autoStart
-              />
-            </div>
-          )}
-
-          {step === 'submit' && <p style={promptStyle}>Does everything look good?</p>}
-
-          {error && (
-            <p
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 14,
-                color: 'var(--color-error)',
-                margin: 0,
-              }}
-            >
-              {error}
-            </p>
-          )}
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            {step === 'name' ? (
-              <button type="button" onClick={onCancel} style={secondaryBtnStyle}>
-                Cancel
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null)
-                  const prev = STEP_ORDER[STEP_ORDER.indexOf(step) - 1]
-                  if (prev === 'name') setPreviewCollapsed(false)
-                  changeStep(prev)
-                }}
-                style={secondaryBtnStyle}
-              >
-                Back
-              </button>
-            )}
-
-            {step === 'name' && (
-              <button type="button" onClick={goToRole} style={primaryBtnStyle(false)}>
-                Next
-              </button>
-            )}
-
-            {step === 'role' && (
-              <button
-                type="button"
-                onClick={goToPhoto}
-                disabled={!relationToTomo || roleSpinning}
-                style={primaryBtnStyle(!relationToTomo || roleSpinning)}
-              >
-                Next
-              </button>
-            )}
-
-            {step === 'photo' && (
-              <button type="button" onClick={goToSubmit} style={primaryBtnStyle(false)}>
-                Next
-              </button>
-            )}
-
-            {step === 'submit' && (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                style={primaryBtnStyle(submitting)}
-              >
-                {submitting ? 'Issuing…' : 'Issue my ID'}
-              </button>
-            )}
-          </div>
-          </div>
+        {/* Progress — pinned to shell bottom */}
+        <div
+          style={{
+            flexShrink: 0,
+            height: PROGRESS_FOOTER_H,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <StepProgress step={step} />
         </div>
       </div>
     </div>

@@ -143,29 +143,3 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ citizen: data, deviceToken: ownerToken }, { status: 201 })
 }
-
-export async function DELETE(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get('id')
-  if (!id) {
-    return NextResponse.json({ error: 'Citizen id is required.' }, { status: 400 })
-  }
-
-  const supabase = createServiceClient()
-  const { data: deleted, error } = await supabase
-    .from('citizens')
-    .delete()
-    .eq('id', id)
-    .select('id')
-    .maybeSingle()
-
-  if (error) {
-    console.error('Supabase delete error:', error)
-    return NextResponse.json({ error: 'Failed to delete citizen.' }, { status: 500 })
-  }
-
-  if (!deleted) {
-    return NextResponse.json({ error: 'Citizen not found.' }, { status: 404 })
-  }
-
-  return NextResponse.json({ ok: true })
-}

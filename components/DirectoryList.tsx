@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { clearMyCitizen } from '@/lib/deviceAuth'
 import { isEphemeralMode } from '@/lib/ephemeralCitizen'
 import {
-  clearMyCitizen,
-  getOrCreateDeviceToken,
-  getStoredMyCitizenId,
-  setMyCitizen,
-} from '@/lib/deviceAuth'
+  deleteOwnedCitizen,
+  registerOwnership,
+  resolveOwnership,
+} from '@/lib/ownership'
 import SearchBar from './SearchBar'
 import RightPanel, { type RightPanelMode } from './RightPanel'
 import RetroScrollArea from './RetroScrollArea'
@@ -204,67 +204,27 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [myCitizenId, setMyCitizenId] = useState<string | null>(null)
   const [justGrew, setJustGrew] = useState(false)
   const pointerRef = useRef({ x: 0, y: 0 })
+  const myCitizenIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    myCitizenIdRef.current = myCitizenId
+  }, [myCitizenId])
 
   useEffect(() => {
     let cancelled = false
 
     async function restoreOwnership() {
-      const token = getOrCreateDeviceToken()
-      const stored = getStoredMyCitizenId()
+      const owned = await resolveOwnership(initialCitizens)
+      if (cancelled) return
 
-      const claimCitizen = (id: string) => {
-        if (cancelled) return
-        setMyCitizenId(id)
-        setHoveredId(id)
-        setMyCitizen(id)
-      }
-
-      const linkDeviceToken = (citizenId: string) => {
-        if (!token) return
-        void fetch('/api/citizens/claim', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ citizenId, deviceToken: token }),
-        })
-      }
-
-      if (stored && initialCitizens.some((c) => c.id === stored)) {
-        claimCitizen(stored)
-        linkDeviceToken(stored)
-        return
-      }
-
-      if (token) {
-        try {
-          const res = await fetch(`/api/citizens/me?token=${encodeURIComponent(token)}`)
-          if (res.ok) {
-            const json = (await res.json()) as { citizen: Citizen | null }
-            if (cancelled) return
-
-            if (json.citizen) {
-              claimCitizen(json.citizen.id)
-              setCitizens((prev) =>
-                prev.some((c) => c.id === json.citizen!.id)
-                  ? prev
-                  : [json.citizen!, ...prev],
-              )
-              return
-            }
-          }
-        } catch {
-          // Fall through to stored-id fallback below
-        }
-      }
-
-      if (stored) {
-        claimCitizen(stored)
-        linkDeviceToken(stored)
-        return
-      }
-
-      if (!cancelled) {
+      if (owned) {
+        setMyCitizenId(owned.id)
+        setHoveredId(owned.id)
+        setCitizens((prev) =>
+          prev.some((c) => c.id === owned.id) ? prev : [owned, ...prev],
+        )
+      } else {
         setMyCitizenId(null)
-        clearMyCitizen()
       }
     }
 
@@ -296,13 +256,36 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     if (isEphemeralMode()) return
 
     const channel = supabase
-      .channel('citizens-inserts')
+      .channel('citizens-changes')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'citizens' },
         (payload) => {
           const row = payload.new as Citizen
-          setCitizens((prev) => [row, ...prev])
+          setCitizens((prev) =>
+            prev.some((c) => c.id === row.id) ? prev : [row, ...prev],
+          )
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'citizens' },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id
+          if (!id) return
+
+          setCitizens((prev) => {
+            const next = prev.filter((c) => c.id !== id)
+            setHoveredId((hovered) =>
+              hovered === id ? (next[0]?.id ?? null) : hovered,
+            )
+            return next
+          })
+
+          if (myCitizenIdRef.current === id) {
+            setMyCitizenId(null)
+            clearMyCitizen()
+          }
         },
       )
       .subscribe()
@@ -323,22 +306,27 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
   const handleIssue = useCallback((citizen: Citizen) => {
     setPrintingCitizen(citizen)
+    registerOwnership(citizen)
     setMyCitizenId(citizen.id)
-    setMyCitizen(citizen.id)
     setPanelMode('print')
   }, [])
 
   const handlePrintComplete = useCallback(() => {
     if (printingCitizen) {
+      const oldId = myCitizenId
+      const newId = printingCitizen.id
+
       setCitizens((prev) => {
-        const withoutOld = myCitizenId
-          ? prev.filter((c) => c.id !== myCitizenId)
-          : prev
-        return [printingCitizen, ...withoutOld]
+        let next =
+          oldId && oldId !== newId ? prev.filter((c) => c.id !== oldId) : prev
+        if (!next.some((c) => c.id === newId)) {
+          next = [printingCitizen, ...next]
+        }
+        return next
       })
-      setHoveredId(printingCitizen.id)
-      setMyCitizenId(printingCitizen.id)
-      setMyCitizen(printingCitizen.id)
+      setHoveredId(newId)
+      registerOwnership(printingCitizen)
+      setMyCitizenId(newId)
       setJustGrew(true)
       setTimeout(() => setJustGrew(false), 900)
     }
@@ -362,18 +350,9 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     if (!confirm('Delete your Tomoland ID? This cannot be undone.')) return
 
     const idToRemove = myCitizenId
-
-    try {
-      const res = await fetch(`/api/citizens?id=${encodeURIComponent(idToRemove)}`, {
-        method: 'DELETE',
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert((json as { error?: string }).error ?? 'Failed to delete your ID.')
-        return
-      }
-    } catch {
-      alert('Failed to delete your ID.')
+    const result = await deleteOwnedCitizen()
+    if (!result.ok) {
+      alert(result.error ?? 'Failed to delete your ID.')
       return
     }
 
@@ -383,7 +362,6 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       return next
     })
     setMyCitizenId(null)
-    clearMyCitizen()
     setPanelMode('view')
   }, [myCitizenId])
 
@@ -506,7 +484,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           minHeight: 0,
           paddingTop: 4,
           overflowY: 'auto',
-          overflowX: 'hidden',
+          overflowX: isCreating ? 'visible' : 'hidden',
           transition: `flex-basis 0.55s ${flexEase}`,
         }}
       >

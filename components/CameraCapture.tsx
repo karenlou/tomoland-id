@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { playShutterSound } from '@/lib/clickSound'
+import RedShutterSphere from './RedShutterSphere'
 
 const CAPTURE_W = 480
 const CAPTURE_H = 560
@@ -575,17 +576,7 @@ export default function CameraCapture({
                   flexShrink: 0,
                 }}
               >
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '50%',
-                    background: capturedUrl
-                      ? '#888'
-                      : 'linear-gradient(180deg, #ff8fa8 0%, #e8456a 100%)',
-                    border: '2px solid var(--color-border)',
-                  }}
-                />
+                <RedShutterSphere size={44} inactive={Boolean(capturedUrl)} />
               </button>
             </div>
 

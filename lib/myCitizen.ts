@@ -4,3 +4,11 @@ export {
   getStoredMyCitizenId,
   setMyCitizen as setStoredMyCitizenId,
 } from '@/lib/deviceAuth'
+
+export {
+  deleteOwnedCitizen,
+  fetchOwnedCitizen,
+  linkCitizenToDevice,
+  registerOwnership,
+  resolveOwnership,
+} from '@/lib/ownership'
