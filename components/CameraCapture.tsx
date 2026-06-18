@@ -133,6 +133,7 @@ export default function CameraCapture({
 
   const [mode, setMode] = useState<'idle' | 'camera' | 'file'>('idle')
   const [cameraError, setCameraError] = useState(false)
+  const [permissionDenied, setPermissionDenied] = useState(false)
   const [flash, setFlash] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
 
@@ -152,6 +153,7 @@ export default function CameraCapture({
 
   const startCamera = useCallback(async () => {
     setCameraError(false)
+    setPermissionDenied(false)
     stopCamera()
 
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -171,7 +173,10 @@ export default function CameraCapture({
           },
           audio: false,
         })
-      } catch {
+      } catch (inner) {
+        if (inner instanceof DOMException && inner.name === 'NotAllowedError') {
+          throw inner
+        }
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
           audio: false,
@@ -179,7 +184,10 @@ export default function CameraCapture({
       }
       streamRef.current = stream
       setMode('camera')
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setPermissionDenied(true)
+      }
       setCameraError(true)
       setMode('file')
     }
@@ -213,17 +221,17 @@ export default function CameraCapture({
   }, [mode, stopCamera])
 
   useEffect(() => {
-    if (autoStart && !capturedUrl && mode === 'idle') {
-      startCamera()
+    if (autoStart && !capturedUrl) {
+      void startCamera()
     }
-  }, [autoStart, capturedUrl, mode, startCamera])
+  }, [autoStart, capturedUrl, startCamera])
 
   useEffect(() => {
-    if (!autoStart && mode === 'camera') {
+    if (!autoStart) {
       stopCamera()
       if (!capturedUrl) setMode('idle')
     }
-  }, [autoStart, mode, capturedUrl, stopCamera])
+  }, [autoStart, capturedUrl, stopCamera])
 
   function capture() {
     const video = videoRef.current
@@ -598,8 +606,10 @@ export default function CameraCapture({
       </div>
 
       {cameraError && mode === 'file' && (
-        <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: 0 }}>
-          Camera not available — tap the screen to upload a photo.
+        <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: 0, textAlign: 'center' }}>
+          {permissionDenied
+            ? 'Camera blocked — allow camera for this site in your browser settings, then tap ↻ RETRY CAM or the shutter.'
+            : 'Camera not available — tap the shutter to try again, or upload a photo.'}
         </p>
       )}
 

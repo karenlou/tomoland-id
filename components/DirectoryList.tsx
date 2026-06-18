@@ -212,36 +212,59 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       const token = getOrCreateDeviceToken()
       const stored = getStoredMyCitizenId()
 
-      if (stored && initialCitizens.some((c) => c.id === stored)) {
-        if (!cancelled) setMyCitizenId(stored)
-        return
-      }
-
-      if (!token || isEphemeralMode()) {
-        if (stored && !cancelled) clearMyCitizen()
-        return
-      }
-
-      try {
-        const res = await fetch(`/api/citizens/me?token=${encodeURIComponent(token)}`)
-        if (!res.ok) return
-        const json = (await res.json()) as { citizen: Citizen | null }
+      const claimCitizen = (id: string) => {
         if (cancelled) return
+        setMyCitizenId(id)
+        setHoveredId(id)
+        setMyCitizen(id)
+      }
 
-        if (json.citizen) {
-          setMyCitizenId(json.citizen.id)
-          setMyCitizen(json.citizen.id)
-          setCitizens((prev) =>
-            prev.some((c) => c.id === json.citizen!.id)
-              ? prev
-              : [json.citizen!, ...prev],
-          )
-        } else {
-          setMyCitizenId(null)
-          clearMyCitizen()
+      const linkDeviceToken = (citizenId: string) => {
+        if (!token) return
+        void fetch('/api/citizens/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ citizenId, deviceToken: token }),
+        })
+      }
+
+      if (stored && initialCitizens.some((c) => c.id === stored)) {
+        claimCitizen(stored)
+        linkDeviceToken(stored)
+        return
+      }
+
+      if (token) {
+        try {
+          const res = await fetch(`/api/citizens/me?token=${encodeURIComponent(token)}`)
+          if (res.ok) {
+            const json = (await res.json()) as { citizen: Citizen | null }
+            if (cancelled) return
+
+            if (json.citizen) {
+              claimCitizen(json.citizen.id)
+              setCitizens((prev) =>
+                prev.some((c) => c.id === json.citizen!.id)
+                  ? prev
+                  : [json.citizen!, ...prev],
+              )
+              return
+            }
+          }
+        } catch {
+          // Fall through to stored-id fallback below
         }
-      } catch {
-        // Offline or transient — keep any stored id for this session
+      }
+
+      if (stored) {
+        claimCitizen(stored)
+        linkDeviceToken(stored)
+        return
+      }
+
+      if (!cancelled) {
+        setMyCitizenId(null)
+        clearMyCitizen()
       }
     }
 

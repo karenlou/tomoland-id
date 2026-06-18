@@ -322,10 +322,10 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
             </>
           )}
 
-          {(step === 'photo' || step === 'submit') && (
+          {step === 'photo' && (
             <div
               style={{
-                display: step === 'photo' ? 'flex' : 'none',
+                display: 'flex',
                 flexDirection: 'column',
                 gap: 14,
               }}
@@ -336,7 +336,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
                 onClear={handleClear}
                 capturedUrl={photoPreviewUrl}
                 compact
-                autoStart={step === 'photo'}
+                autoStart
               />
             </div>
           )}
