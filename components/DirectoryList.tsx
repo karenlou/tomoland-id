@@ -362,17 +362,14 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     if (!confirm('Delete your Tomoland ID? This cannot be undone.')) return
 
     const idToRemove = myCitizenId
-    const token = getOrCreateDeviceToken()
 
     try {
-      const params = new URLSearchParams({ id: idToRemove })
-      if (token) params.set('token', token)
-      const res = await fetch(`/api/citizens?${params.toString()}`, {
+      const res = await fetch(`/api/citizens?id=${encodeURIComponent(idToRemove)}`, {
         method: 'DELETE',
       })
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        alert(json.error ?? 'Failed to delete your ID.')
+        alert((json as { error?: string }).error ?? 'Failed to delete your ID.')
         return
       }
     } catch {

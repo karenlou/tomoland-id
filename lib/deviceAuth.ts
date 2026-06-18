@@ -30,7 +30,10 @@ export function getOrCreateDeviceToken(): string {
 
   try {
     const fromStorage = localStorage.getItem(DEVICE_TOKEN_KEY)
-    if (fromStorage) return fromStorage
+    if (fromStorage) {
+      setCookie(DEVICE_TOKEN_KEY, fromStorage)
+      return fromStorage
+    }
 
     const fromCookie = getCookie(DEVICE_TOKEN_KEY)
     if (fromCookie) {

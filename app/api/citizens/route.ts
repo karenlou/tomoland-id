@@ -146,49 +146,25 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
-  const token = req.nextUrl.searchParams.get('token')?.trim()
-
   if (!id) {
     return NextResponse.json({ error: 'Citizen id is required.' }, { status: 400 })
   }
 
   const supabase = createServiceClient()
-
-  if (token) {
-    const { data: owned, error: lookupError } = await supabase
-      .from('citizens')
-      .select('id')
-      .eq('id', id)
-      .eq('owner_token', token)
-      .maybeSingle()
-
-    if (lookupError?.message.includes('owner_token')) {
-      // Column not migrated yet — allow delete by id only (legacy behavior)
-    } else if (lookupError) {
-      console.error('Supabase owner lookup error:', lookupError)
-      return NextResponse.json({ error: 'Failed to delete citizen.' }, { status: 500 })
-    } else if (!owned) {
-      const { data: legacy } = await supabase
-        .from('citizens')
-        .select('owner_token')
-        .eq('id', id)
-        .maybeSingle()
-
-      if (legacy?.owner_token) {
-        return NextResponse.json(
-          { error: 'You can only delete an ID created on this device.' },
-          { status: 403 },
-        )
-      }
-      // Legacy row without owner_token — allow delete if client knows the id
-    }
-  }
-
-  const { error } = await supabase.from('citizens').delete().eq('id', id)
+  const { data: deleted, error } = await supabase
+    .from('citizens')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     console.error('Supabase delete error:', error)
     return NextResponse.json({ error: 'Failed to delete citizen.' }, { status: 500 })
+  }
+
+  if (!deleted) {
+    return NextResponse.json({ error: 'Citizen not found.' }, { status: 404 })
   }
 
   return NextResponse.json({ ok: true })
