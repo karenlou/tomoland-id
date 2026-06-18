@@ -197,7 +197,10 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [citizens, setCitizens] = useState<Citizen[]>(initialCitizens)
   const [query, setQuery] = useState('')
   const [hoveredId, setHoveredId] = useState<string | null>(
-    initialCitizens[0]?.id ?? null,
+    () =>
+      initialCitizens.find((c) => c.name.trim().toUpperCase() === 'TOMO')?.id ??
+      initialCitizens[0]?.id ??
+      null,
   )
   const [panelMode, setPanelMode] = useState<RightPanelMode>('view')
   const [printingCitizen, setPrintingCitizen] = useState<Citizen | null>(null)
@@ -221,7 +224,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         setMyCitizenId(owned.id)
         setHoveredId(owned.id)
         setCitizens((prev) =>
-          prev.some((c) => c.id === owned.id) ? prev : [owned, ...prev],
+          prev.some((c) => c.id === owned.id) ? prev : [...prev, owned],
         )
       } else {
         setMyCitizenId(null)
@@ -263,7 +266,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         (payload) => {
           const row = payload.new as Citizen
           setCitizens((prev) =>
-            prev.some((c) => c.id === row.id) ? prev : [row, ...prev],
+            prev.some((c) => c.id === row.id) ? prev : [...prev, row],
           )
         },
       )
@@ -320,7 +323,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         let next =
           oldId && oldId !== newId ? prev.filter((c) => c.id !== oldId) : prev
         if (!next.some((c) => c.id === newId)) {
-          next = [printingCitizen, ...next]
+          next = [...next, printingCitizen]
         }
         return next
       })
