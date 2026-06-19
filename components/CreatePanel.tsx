@@ -5,7 +5,7 @@ import { playClickSound } from '@/lib/clickSound'
 import CameraCapture from './CameraCapture'
 import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
-import { CARD_BORDER, CARD_H, CARD_W, CARD_SHADOW, cardRadiusAtScale } from '@/lib/cardConstants'
+import { CARD_DEPTH_SHADOW, CARD_H, CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
 import { getOrCreateDeviceToken, getStoredMyCitizenId } from '@/lib/deviceAuth'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
@@ -189,21 +189,28 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
         style={{
           width: SPOTLIGHT_W,
           height: cardH,
-          overflow: 'hidden',
           borderRadius: cardRadius,
-          border: CARD_BORDER,
-          boxShadow: CARD_SHADOW,
+          boxShadow: CARD_DEPTH_SHADOW,
         }}
       >
         <div
           style={{
-            transform: `scale(${SCALE})`,
-            transformOrigin: 'top left',
-            width: CARD_W,
-            height: CARD_H,
+            width: SPOTLIGHT_W,
+            height: cardH,
+            overflow: 'hidden',
+            borderRadius: cardRadius,
           }}
         >
-          <CitizenCard citizen={previewCitizen} preview />
+          <div
+            style={{
+              transform: `scale(${SCALE})`,
+              transformOrigin: 'top left',
+              width: CARD_W,
+              height: CARD_H,
+            }}
+          >
+            <CitizenCard citizen={previewCitizen} preview />
+          </div>
         </div>
       </div>
     </div>

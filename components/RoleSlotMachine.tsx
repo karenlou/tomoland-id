@@ -14,6 +14,14 @@ const FILLER_COUNT = 27
 const SPIN_MS = 2800
 const KIOSK_SPIN_MS = 1400
 
+/** Lever travel — how far down the knob can be dragged, and how far counts as a full pull */
+const MAX_PULL = 70
+const PULL_THRESHOLD = 58
+/** Release flourish — dips past MAX_PULL before springing back, like the lever's
+ * own momentum carrying it slightly further than the user pulled */
+const OVERSHOOT_PULL = MAX_PULL + 16
+const DIP_MS = 110
+
 type Phase = 'idle' | 'reset' | 'spinning' | 'done'
 
 interface RoleSlotMachineProps {
@@ -42,7 +50,13 @@ export default function RoleSlotMachine({
   const [phase, setPhase] = useState<Phase>('idle')
   const [hasRolled, setHasRolled] = useState(false)
   const [leverHover, setLeverHover] = useState(false)
+  const [dragY, setDragY] = useState(0)
+  const [knobTransition, setKnobTransition] = useState<'none' | 'dip' | 'spring'>('spring')
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dragStartYRef = useRef(0)
+  const isDraggingRef = useRef(false)
+  const triggeredRef = useRef(false)
 
   const rowH = bigButton ? KIOSK_ITEM_H : ITEM_H
   const reelFontSize = bigButton ? 20 : 12
@@ -51,6 +65,7 @@ export default function RoleSlotMachine({
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      if (dipTimeoutRef.current) clearTimeout(dipTimeoutRef.current)
     }
   }, [])
 
@@ -83,6 +98,74 @@ export default function RoleSlotMachine({
         }, spinDuration)
       })
     })
+  }
+
+  /** Release flourish — dip a bit lower than wherever the knob currently sits,
+   * then spring back to rest. Plays whether the roll came from a drag or a click. */
+  function flourishRelease() {
+    if (dipTimeoutRef.current) clearTimeout(dipTimeoutRef.current)
+    setKnobTransition('dip')
+    setDragY(OVERSHOOT_PULL)
+    dipTimeoutRef.current = setTimeout(() => {
+      setKnobTransition('spring')
+      setDragY(0)
+    }, DIP_MS)
+  }
+
+  function handleKnobPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    if (phase === 'spinning') return
+    if (dipTimeoutRef.current) clearTimeout(dipTimeoutRef.current)
+    isDraggingRef.current = true
+    dragStartYRef.current = e.clientY
+    triggeredRef.current = false
+    setKnobTransition('none')
+    setDragY(0)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function handleKnobPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    if (!isDraggingRef.current || triggeredRef.current) return
+    const delta = Math.min(MAX_PULL, Math.max(0, e.clientY - dragStartYRef.current))
+    setDragY(delta)
+    if (delta >= PULL_THRESHOLD) {
+      triggeredRef.current = true
+      isDraggingRef.current = false
+      pull()
+      flourishRelease()
+    }
+  }
+
+  function handleKnobPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    isDraggingRef.current = false
+    // Already fired + animating from handleKnobPointerMove crossing the threshold.
+    if (triggeredRef.current) return
+    // A plain click (or a drag that didn't reach the threshold) still counts as a roll.
+    triggeredRef.current = true
+    pull()
+    flourishRelease()
+  }
+
+  function handleKnobPointerCancel(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    isDraggingRef.current = false
+    if (!triggeredRef.current) {
+      setKnobTransition('spring')
+      setDragY(0)
+    }
+  }
+
+  function handleKnobKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if ((e.key === 'Enter' || e.key === ' ') && phase !== 'spinning') {
+      e.preventDefault()
+      triggeredRef.current = true
+      pull()
+      flourishRelease()
+    }
   }
 
   return (
@@ -250,20 +333,31 @@ export default function RoleSlotMachine({
               <div aria-hidden style={leverRailStyle} />
               <button
                 type="button"
-                onClick={pull}
+                onPointerDown={handleKnobPointerDown}
+                onPointerMove={handleKnobPointerMove}
+                onPointerUp={handleKnobPointerUp}
+                onPointerCancel={handleKnobPointerCancel}
+                onKeyDown={handleKnobKeyDown}
                 disabled={phase === 'spinning'}
-                aria-label="Pull lever to choose your role"
-                className={phase === 'spinning' ? 'slot-knob-pulled' : undefined}
+                aria-label="Pull lever down to choose your role"
                 style={{
                   position: 'absolute',
                   top: 0,
                   left: '50%',
-                  transform: 'translateX(-50%)',
+                  transform: `translate(-50%, ${dragY}px)`,
+                  transition:
+                    knobTransition === 'none'
+                      ? 'none'
+                      : knobTransition === 'dip'
+                        ? `transform ${DIP_MS}ms ease-out`
+                        : 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   width: 20,
                   height: 20,
                   border: 'none',
                   background: 'transparent',
-                  cursor: phase === 'spinning' ? 'default' : 'pointer',
+                  cursor: phase === 'spinning' ? 'default' : 'grab',
+                  touchAction: 'none',
+                  userSelect: 'none',
                   padding: 0,
                   zIndex: 2,
                 }}
@@ -282,7 +376,7 @@ export default function RoleSlotMachine({
               </button>
               {leverHover && phase !== 'spinning' && (
                 <span className="slot-lever-hint">
-                  {phase === 'done' ? 'Reroll?' : 'Roll'}
+                  {phase === 'done' ? 'Reroll ↓' : 'Pull ↓'}
                 </span>
               )}
             </div>

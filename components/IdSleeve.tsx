@@ -1,7 +1,23 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import { CARD_BORDER_RADIUS } from '@/lib/cardConstants'
+
+/** Shared by the sleeve's outer edge and the notch cutout, so the notch reads
+ * as a punched-through hole in the same plastic rather than a flat pill on top. */
+const SLEEVE_BORDER = '1.5px solid rgba(255, 255, 255, 0.55)'
+/** The inset highlight/shadow pair is what actually reads as a beveled edge —
+ * a plain border alone looks flat. Shared so the notch matches the outer rim. */
+const SLEEVE_EDGE_BEVEL = 'inset 0 1px 0 rgba(255,255,255,0.75), inset 0 -1px 0 rgba(44,37,17,0.06)'
+const SLEEVE_OUTER_SHADOW = '0 4px 12px rgba(44, 37, 17, 0.12), 0 12px 28px rgba(44, 37, 17, 0.1)'
+/** Plastic sheen behind/over the card — slightly stronger than before, it was reading too sheer */
+const SLEEVE_SHEEN =
+  'linear-gradient(165deg, rgba(255,255,255,0.3) 0%, rgba(255,252,245,0.22) 45%, rgba(255,248,228,0.2) 100%)'
+
+const NOTCH_W = 60
+const NOTCH_H = 11
+const NOTCH_TOP = 12
+const NOTCH_RADIUS = NOTCH_H / 2
 
 interface IdSleeveProps {
   children: React.ReactNode
@@ -19,6 +35,39 @@ export function getSleeveMetrics(cardWidth: number, cardScale: number) {
   return { padX, padTop, padBottom, cardRadius, sleeveRadius }
 }
 
+/**
+ * SVG mask def — punches the notch out of the plastic sheen so it's a true
+ * cutout showing whatever's behind the sleeve, rather than a separate fill
+ * color that has to be kept in sync with the surrounding background by hand.
+ */
+function NotchMaskDef({
+  maskId,
+  totalWidth,
+  totalHeight,
+}: {
+  maskId: string
+  totalWidth: number
+  totalHeight: number
+}) {
+  return (
+    <svg width={0} height={0} style={{ position: 'absolute' }} aria-hidden>
+      <defs>
+        <mask id={maskId} maskContentUnits="userSpaceOnUse">
+          <rect x={0} y={0} width={totalWidth} height={totalHeight} fill="white" />
+          <rect
+            x={(totalWidth - NOTCH_W) / 2}
+            y={NOTCH_TOP}
+            width={NOTCH_W}
+            height={NOTCH_H}
+            rx={NOTCH_RADIUS}
+            fill="black"
+          />
+        </mask>
+      </defs>
+    </svg>
+  )
+}
+
 /** Plastic shell only — used for slip-on animation over an existing card */
 export function IdSleeveShell({
   cardWidth,
@@ -33,38 +82,54 @@ export function IdSleeveShell({
   className?: string
   style?: React.CSSProperties
 }) {
+  const maskId = useId()
   const { padX, padTop, padBottom, sleeveRadius } = getSleeveMetrics(cardWidth, cardScale)
+  const totalW = cardWidth + padX * 2
+  const totalH = cardHeight + padTop + padBottom
 
   return (
     <div
       className={className ? `id-surface ${className}` : 'id-surface'}
       style={{
         position: 'relative',
-        width: cardWidth + padX * 2,
-        height: cardHeight + padTop + padBottom,
+        width: totalW,
+        height: totalH,
         padding: `${padTop}px ${padX}px ${padBottom}px`,
         borderRadius: sleeveRadius,
-        background:
-          'linear-gradient(165deg, rgba(255,255,255,0.22) 0%, rgba(255,252,245,0.16) 45%, rgba(255,248,228,0.14) 100%)',
-        border: '1.5px solid rgba(255, 255, 255, 0.55)',
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.75), inset 0 -1px 0 rgba(44,37,17,0.06), 0 4px 12px rgba(44, 37, 17, 0.12), 0 12px 28px rgba(44, 37, 17, 0.1)',
+        border: SLEEVE_BORDER,
+        boxShadow: `${SLEEVE_EDGE_BEVEL}, ${SLEEVE_OUTER_SHADOW}`,
         boxSizing: 'border-box',
         pointerEvents: 'none',
         ...style,
       }}
     >
+      <NotchMaskDef maskId={maskId} totalWidth={totalW} totalHeight={totalH} />
+
       <div
         aria-hidden
         style={{
           position: 'absolute',
-          top: 12,
+          inset: 0,
+          borderRadius: sleeveRadius,
+          background: SLEEVE_SHEEN,
+          mask: `url(#${maskId})`,
+          WebkitMaskImage: `url(#${maskId})`,
+        }}
+      />
+
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: NOTCH_TOP,
           left: '50%',
           transform: 'translateX(-50%)',
-          width: 60,
-          height: 11,
-          borderRadius: 999,
-          background: 'var(--color-paper)',
+          width: NOTCH_W,
+          height: NOTCH_H,
+          borderRadius: NOTCH_RADIUS,
+          border: SLEEVE_BORDER,
+          boxShadow: SLEEVE_EDGE_BEVEL,
+          boxSizing: 'border-box',
           zIndex: 5,
         }}
       />
@@ -85,16 +150,17 @@ const IDLE: PointerState = { x: 50, y: 22, nx: 0, ny: -0.35 }
 export default function IdSleeve({
   children,
   cardWidth,
+  cardHeight,
   cardScale,
 }: IdSleeveProps) {
+  const maskId = useId()
   const ref = useRef<HTMLDivElement>(null)
   const [pointer, setPointer] = useState<PointerState>(IDLE)
   const [hovered, setHovered] = useState(false)
 
-  const { padX, padTop, padBottom, cardRadius, sleeveRadius } = getSleeveMetrics(
-    cardWidth,
-    cardScale,
-  )
+  const { padX, padTop, padBottom, sleeveRadius } = getSleeveMetrics(cardWidth, cardScale)
+  const totalW = cardWidth + padX * 2
+  const totalH = cardHeight + padTop + padBottom
 
   const onMove = useCallback((e: React.MouseEvent) => {
     const el = ref.current
@@ -124,6 +190,7 @@ export default function IdSleeve({
 
   return (
     <div className="id-surface" style={{ perspective: 1100, perspectiveOrigin: '50% 45%' }}>
+      <NotchMaskDef maskId={maskId} totalWidth={totalW} totalHeight={totalH} />
       <div
         ref={ref}
         onMouseMove={onMove}
@@ -137,9 +204,8 @@ export default function IdSleeve({
           width: cardWidth + padX * 2,
           padding: `${padTop}px ${padX}px ${padBottom}px`,
           borderRadius: sleeveRadius,
-          border: '1.5px solid rgba(255, 255, 255, 0.55)',
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.75), inset 0 -1px 0 rgba(44,37,17,0.06), 0 4px 12px rgba(44, 37, 17, 0.12), 0 12px 28px rgba(44, 37, 17, 0.1)',
+          border: SLEEVE_BORDER,
+          boxShadow: `${SLEEVE_EDGE_BEVEL}, ${SLEEVE_OUTER_SHADOW}`,
           overflow: 'visible',
           cursor: 'default',
           transform: `rotateX(${tiltX}deg) rotateY(${tiltY}deg)`,
@@ -164,17 +230,20 @@ export default function IdSleeve({
           {children}
         </div>
 
-        {/* Translucent plastic sheet — rendered in front of the card, not behind it */}
+        {/* Translucent plastic sheet — rendered in front of the card, not behind it.
+         * Masked so the notch cutout shows straight through to whatever is behind
+         * the whole sleeve, instead of needing a hand-matched fill color. */}
         <div
           aria-hidden
           style={{
             position: 'absolute',
             inset: 0,
             borderRadius: sleeveRadius,
-            background:
-              'linear-gradient(165deg, rgba(255,255,255,0.22) 0%, rgba(255,252,245,0.16) 45%, rgba(255,248,228,0.14) 100%)',
+            background: SLEEVE_SHEEN,
             pointerEvents: 'none',
             zIndex: 2,
+            mask: `url(#${maskId})`,
+            WebkitMaskImage: `url(#${maskId})`,
           }}
         />
 
@@ -188,21 +257,28 @@ export default function IdSleeve({
               background: lightWash,
               pointerEvents: 'none',
               zIndex: 3,
+              mask: `url(#${maskId})`,
+              WebkitMaskImage: `url(#${maskId})`,
             }}
           />
         )}
 
+        {/* Notch cutout — border + bevel only, no fill of its own. The mask above
+         * already punches the hole through the sheen/light-wash layers, so this
+         * is a true see-through window rather than a color-matched patch. */}
         <div
           aria-hidden
           style={{
             position: 'absolute',
-            top: 12,
+            top: NOTCH_TOP,
             left: '50%',
-            transform: 'translateX(-50%)',
-            width: 60,
-            height: 11,
-            borderRadius: 999,
-            background: 'var(--color-paper)',
+            transform: 'translateX(-50%) translateZ(2px)',
+            width: NOTCH_W,
+            height: NOTCH_H,
+            borderRadius: NOTCH_RADIUS,
+            border: SLEEVE_BORDER,
+            boxShadow: SLEEVE_EDGE_BEVEL,
+            boxSizing: 'border-box',
             zIndex: 5,
           }}
         />

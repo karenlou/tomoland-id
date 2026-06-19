@@ -2,10 +2,20 @@
 
 import CitizenCard from './CitizenCard'
 import IdSleeve from './IdSleeve'
-import { CARD_H, CARD_W, cardRadiusAtScale, SPOTLIGHT_SLEEVE_W, SPOTLIGHT_W } from '@/lib/cardConstants'
+import {
+  CARD_DEPTH_SHADOW,
+  CARD_H,
+  CARD_W,
+  cardRadiusAtScale,
+  SPOTLIGHT_SLEEVE_W,
+  SPOTLIGHT_W,
+} from '@/lib/cardConstants'
 import type { Citizen } from '@/types'
 
-const SCALE = SPOTLIGHT_W / CARD_W
+/** Slightly smaller than the standard spotlight width, so the card has more
+ * breathing room inside its new bordered mount */
+const DISPLAY_W = Math.round(SPOTLIGHT_W * 0.9)
+const SCALE = DISPLAY_W / CARD_W
 
 interface IdSpotlightProps {
   citizen: Citizen | null
@@ -41,9 +51,7 @@ export function WelcomeBar({
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
-        border: '1px solid var(--color-border)',
         background: 'var(--color-tomo-yellow-dark)',
-        boxSizing: 'border-box',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -165,32 +173,52 @@ export default function IdSpotlight({
   const cardRadius = cardRadiusAtScale(SCALE)
 
   const cardBlock = (
-    <div style={{ display: 'flex', justifyContent: 'center' }}>
-      <IdSleeve cardWidth={SPOTLIGHT_W} cardHeight={cardH} cardScale={SCALE}>
+    <div
+      style={{
+        width: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '28px 20px',
+        borderTop: '1.5px solid var(--color-border)',
+        background: 'var(--color-tomo-yellow-light)',
+        flexShrink: 0,
+      }}
+    >
+      <IdSleeve cardWidth={DISPLAY_W} cardHeight={cardH} cardScale={SCALE}>
         {citizen ? (
           <div
             style={{
-              width: SPOTLIGHT_W,
+              width: DISPLAY_W,
               height: cardH,
-              overflow: 'hidden',
               borderRadius: cardRadius,
+              boxShadow: CARD_DEPTH_SHADOW,
             }}
           >
             <div
               style={{
-                transform: `scale(${SCALE})`,
-                transformOrigin: 'top left',
-                width: CARD_W,
-                height: CARD_H,
+                width: DISPLAY_W,
+                height: cardH,
+                overflow: 'hidden',
+                borderRadius: cardRadius,
               }}
             >
-              <CitizenCard citizen={citizen} />
+              <div
+                style={{
+                  transform: `scale(${SCALE})`,
+                  transformOrigin: 'top left',
+                  width: CARD_W,
+                  height: CARD_H,
+                }}
+              >
+                <CitizenCard citizen={citizen} />
+              </div>
             </div>
           </div>
         ) : (
           <div
             style={{
-              width: SPOTLIGHT_W,
+              width: DISPLAY_W,
               height: cardH,
               borderRadius: cardRadius,
               background: 'var(--color-tomo-yellow)',
@@ -202,10 +230,18 @@ export default function IdSpotlight({
     </div>
   )
 
-  const welcomeBlock = (
+  return (
     <div
       className={revealFooter ? 'id-spotlight-footer-in' : undefined}
-      style={{ width: SPOTLIGHT_SLEEVE_W, maxWidth: '100%', flexShrink: 0 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        maxWidth: SPOTLIGHT_SLEEVE_W,
+        boxSizing: 'border-box',
+        border: '1.5px solid var(--color-border)',
+        flexShrink: 0,
+      }}
     >
       <WelcomeBar
         hasOwnId={hasOwnId}
@@ -215,22 +251,6 @@ export default function IdSpotlight({
         onReissue={onReissue}
         onDelete={onDelete}
       />
-    </div>
-  )
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 20,
-        width: '100%',
-        maxWidth: SPOTLIGHT_SLEEVE_W,
-        flexShrink: 0,
-      }}
-    >
-      {welcomeBlock}
       {cardBlock}
     </div>
   )

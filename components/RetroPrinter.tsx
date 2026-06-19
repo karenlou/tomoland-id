@@ -5,6 +5,7 @@ import CitizenCard from './CitizenCard'
 import FlippableId from './FlippableId'
 import { IdSleeveShell, getSleeveMetrics } from './IdSleeve'
 import { CARD_H, CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
+import { playPrinterSound, stopPrinterSound } from '@/lib/clickSound'
 import type { Citizen } from '@/types'
 
 const PRINT_W = 340
@@ -57,8 +58,15 @@ export default function RetroPrinter({ citizen, onComplete }: RetroPrinterProps)
   const showSleeveShell = isHold || isSettling
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('hold'), PRINT_DURATION_MS)
-    return () => clearTimeout(t1)
+    playPrinterSound()
+    const t1 = setTimeout(() => {
+      setPhase('hold')
+      stopPrinterSound()
+    }, PRINT_DURATION_MS)
+    return () => {
+      clearTimeout(t1)
+      stopPrinterSound()
+    }
   }, [])
 
   useEffect(() => {

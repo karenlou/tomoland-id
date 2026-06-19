@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, type RefObject } from 'react'
 import CameraCapture, { CAMERA_BODY_W } from './CameraCapture'
-import PartyCard from './PartyCard'
+import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
 import { supabase } from '@/lib/supabase'
 import { isProfane } from '@/lib/profanity'
@@ -76,7 +76,7 @@ function PartyCardPreview({
               height: CARD_H,
             }}
           >
-            <PartyCard citizen={citizen} preview={preview} />
+            <CitizenCard citizen={citizen} preview={preview} />
           </div>
         </div>
       </div>

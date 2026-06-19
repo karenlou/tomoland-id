@@ -9,9 +9,14 @@ export function cardRadiusAtScale(scale: number): number {
 }
 
 /** Subtle card edge + layered depth */
-export const CARD_BORDER = '1px solid rgba(44, 37, 17, 0.12)'
+export const CARD_BORDER = '2px solid rgba(44, 37, 17, 0.2)'
 export const CARD_SHADOW =
   'inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 1px 2px rgba(44, 37, 17, 0.08), 0 4px 10px rgba(44, 37, 17, 0.1), 0 10px 22px rgba(44, 37, 17, 0.08)'
+/** Tight, close-hugging lift — distinct from CARD_SHADOW's larger diffuse glow */
+export const CARD_DEPTH_SHADOW = '0 1px 3px rgba(44, 37, 17, 0.18)'
+/** Off-white used wherever a surface should read as paper/plastic rather than
+ * the page's yellow — the sleeve notch, photo slot, spotlight mount, etc. */
+export const OFF_WHITE_FILL = '#F3EFED'
 
 /** Spotlight + sleeve layout (matches IdSleeve padding) */
 export const SPOTLIGHT_W = 400

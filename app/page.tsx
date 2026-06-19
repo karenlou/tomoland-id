@@ -146,7 +146,7 @@ export default async function DirectoryPage() {
           flexShrink: 0,
         }}
       >
-        Questions? Text us at +1 (415) 770 - 0048
+        Contact: +1 (415) 770 - 0048
       </p>
     </div>
   )
