@@ -18,3 +18,10 @@ export const SPOTLIGHT_W = 400
 export const SPOTLIGHT_SCALE = SPOTLIGHT_W / CARD_W
 export const SLEEVE_PAD_X = 26
 export const SPOTLIGHT_SLEEVE_W = SPOTLIGHT_W + SLEEVE_PAD_X * 2
+
+/** Party kiosk print-ready export size (1350x850 per brief — slightly wider
+ * aspect ratio than the card's native 683x433, so scaling to fill the width
+ * leaves a few px of vertical overflow that gets clipped, same as elsewhere. */
+export const PARTY_CARD_W = 1350
+export const PARTY_CARD_H = 850
+export const PARTY_CARD_SCALE = PARTY_CARD_W / CARD_W

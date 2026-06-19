@@ -17,6 +17,8 @@ type Phase = 'idle' | 'reset' | 'spinning' | 'done'
 interface RoleSlotMachineProps {
   onResolved: (role: Role) => void
   onSpinChange?: (spinning: boolean) => void
+  /** Swap the small lever for a big, obvious tap target (e.g. for a touch kiosk) */
+  bigButton?: boolean
 }
 
 function buildStrip(target: Role): Role[] {
@@ -25,7 +27,11 @@ function buildStrip(target: Role): Role[] {
   return [...leading, target, trailing]
 }
 
-export default function RoleSlotMachine({ onResolved, onSpinChange }: RoleSlotMachineProps) {
+export default function RoleSlotMachine({
+  onResolved,
+  onSpinChange,
+  bigButton = false,
+}: RoleSlotMachineProps) {
   const [target, setTarget] = useState<Role>(() => randomRole())
   const [strip, setStrip] = useState<Role[]>(() => buildStrip(target))
   const [phase, setPhase] = useState<Phase>('idle')
@@ -105,12 +111,22 @@ export default function RoleSlotMachine({ onResolved, onSpinChange }: RoleSlotMa
           <MarqueeBulbs active={phase === 'done'} burstKey={target} reverse />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'visible', paddingRight: 6 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: bigButton ? 'column' : 'row',
+            alignItems: 'center',
+            gap: bigButton ? 16 : 12,
+            overflow: 'visible',
+            paddingRight: bigButton ? 0 : 6,
+          }}
+        >
           {/* Reel window — a stack of role rectangles, 3 rows tall so neighbors peek */}
           <div
             style={{
               position: 'relative',
-              flex: 1,
+              width: bigButton ? '100%' : undefined,
+              flex: bigButton ? '0 0 auto' : 1,
               height: ITEM_H * WINDOW_ROWS,
               overflow: 'hidden',
               background: 'var(--color-tomo-yellow)',
@@ -176,58 +192,71 @@ export default function RoleSlotMachine({ onResolved, onSpinChange }: RoleSlotMa
             />
           </div>
 
-          {/* Lever — rail stays put, knob slides down it and springs back */}
-          <div
-            className="slot-lever-column"
-            onMouseEnter={() => setLeverHover(true)}
-            onMouseLeave={() => setLeverHover(false)}
-            style={{
-              position: 'relative',
-              width: 22,
-              height: ITEM_H * WINDOW_ROWS,
-              flexShrink: 0,
-              overflow: 'visible',
-            }}
-          >
-            <div aria-hidden style={leverRailStyle} />
+          {bigButton ? (
             <button
               type="button"
               onClick={pull}
               disabled={phase === 'spinning'}
-              aria-label="Pull lever to choose your role"
-              className={phase === 'spinning' ? 'slot-knob-pulled' : undefined}
+              aria-label="Randomize role"
+              className={phase === 'spinning' ? 'slot-button-pressed' : undefined}
+              style={bigButtonStyle(phase === 'spinning')}
+            >
+              {phase === 'spinning' ? 'Spinning…' : phase === 'done' ? 'Reroll' : 'Randomize'}
+            </button>
+          ) : (
+            /* Lever — rail stays put, knob slides down it and springs back */
+            <div
+              className="slot-lever-column"
+              onMouseEnter={() => setLeverHover(true)}
+              onMouseLeave={() => setLeverHover(false)}
               style={{
-                position: 'absolute',
-                top: 0,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: 20,
-                height: 20,
-                border: 'none',
-                background: 'transparent',
-                cursor: phase === 'spinning' ? 'default' : 'pointer',
-                padding: 0,
-                zIndex: 2,
+                position: 'relative',
+                width: 22,
+                height: ITEM_H * WINDOW_ROWS,
+                flexShrink: 0,
+                overflow: 'visible',
               }}
             >
-              <div
+              <div aria-hidden style={leverRailStyle} />
+              <button
+                type="button"
+                onClick={pull}
+                disabled={phase === 'spinning'}
+                aria-label="Pull lever to choose your role"
+                className={phase === 'spinning' ? 'slot-knob-pulled' : undefined}
                 style={{
-                  position: 'relative',
-                  width: KNOB_SIZE,
-                  height: KNOB_SIZE,
-                  zIndex: 1,
+                  position: 'absolute',
+                  top: 0,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 20,
+                  height: 20,
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: phase === 'spinning' ? 'default' : 'pointer',
+                  padding: 0,
+                  zIndex: 2,
                 }}
               >
-                {phase === 'idle' && <LeverBurst />}
-                <RedShutterSphere size={KNOB_SIZE} />
-              </div>
-            </button>
-            {leverHover && phase !== 'spinning' && (
-              <span className="slot-lever-hint">
-                {phase === 'done' ? 'Reroll?' : 'Roll'}
-              </span>
-            )}
-          </div>
+                <div
+                  style={{
+                    position: 'relative',
+                    width: KNOB_SIZE,
+                    height: KNOB_SIZE,
+                    zIndex: 1,
+                  }}
+                >
+                  {phase === 'idle' && <LeverBurst />}
+                  <RedShutterSphere size={KNOB_SIZE} />
+                </div>
+              </button>
+              {leverHover && phase !== 'spinning' && (
+                <span className="slot-lever-hint">
+                  {phase === 'done' ? 'Reroll?' : 'Roll'}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -291,6 +320,25 @@ const leverRailStyle: React.CSSProperties = {
   width: 4,
   transform: 'translateX(-50%)',
   background: 'var(--color-border)',
+}
+
+function bigButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    boxSizing: 'border-box',
+    background: disabled ? 'var(--color-ink-muted)' : 'var(--color-ink)',
+    color: 'var(--color-tomo-yellow)',
+    border: '1.5px solid var(--color-border)',
+    padding: '10px 16px',
+    fontFamily: 'var(--font-body)',
+    fontSize: 14,
+    fontWeight: 'var(--weight-bold)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    whiteSpace: 'nowrap',
+  }
 }
 
 function MarqueeBulbs({

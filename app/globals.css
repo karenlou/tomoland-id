@@ -648,6 +648,22 @@ body {
   animation: slot-knob-pull 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+@keyframes slot-button-press {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.slot-button-pressed {
+  animation: slot-button-press 0.35s ease;
+}
+
 .slot-lever-burst {
   animation: slot-lever-burst-blink 1s linear infinite;
 }
@@ -794,4 +810,41 @@ body {
 
 .citizen-paper-in {
   animation: citizen-paper-in 0.3s ease both;
+}
+
+/* Party kiosk — smooth step action reveal */
+.kiosk-step-action-slot {
+  display: grid;
+  width: 100%;
+  transition: grid-template-rows 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kiosk-step-action-slot--open {
+  grid-template-rows: 1fr;
+}
+
+.kiosk-step-action-slot--closed {
+  grid-template-rows: 0fr;
+}
+
+.kiosk-step-action-slot > div {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.kiosk-step-action-reveal {
+  display: flex;
+  justify-content: center;
+  animation: kiosk-step-action-reveal 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes kiosk-step-action-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
