@@ -6,6 +6,8 @@ import RedShutterSphere from './RedShutterSphere'
 
 const CAPTURE_W = 480
 const CAPTURE_H = 560
+/** Outer retro camera body — kiosk text/buttons align to this width */
+export const CAMERA_BODY_W = 400
 
 interface CameraCaptureProps {
   onCapture: (blob: Blob, previewUrl: string) => void
@@ -140,7 +142,7 @@ export default function CameraCapture({
 
   const lcdW = compact ? 180 : 240
   const lcdH = compact ? 210 : 280
-  const bodyMaxW = 400
+  const bodyMaxW = CAMERA_BODY_W
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())

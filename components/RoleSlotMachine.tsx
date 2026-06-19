@@ -8,9 +8,11 @@ import RedShutterSphere from './RedShutterSphere'
 const MARQUEE_BULBS = 5
 
 const ITEM_H = 42
+const KIOSK_ITEM_H = 70
 const WINDOW_ROWS = 3
 const FILLER_COUNT = 27
 const SPIN_MS = 2800
+const KIOSK_SPIN_MS = 1400
 
 type Phase = 'idle' | 'reset' | 'spinning' | 'done'
 
@@ -19,6 +21,8 @@ interface RoleSlotMachineProps {
   onSpinChange?: (spinning: boolean) => void
   /** Swap the small lever for a big, obvious tap target (e.g. for a touch kiosk) */
   bigButton?: boolean
+  /** Override reel spin duration (ms) */
+  spinMs?: number
 }
 
 function buildStrip(target: Role): Role[] {
@@ -31,12 +35,18 @@ export default function RoleSlotMachine({
   onResolved,
   onSpinChange,
   bigButton = false,
+  spinMs,
 }: RoleSlotMachineProps) {
   const [target, setTarget] = useState<Role>(() => randomRole())
   const [strip, setStrip] = useState<Role[]>(() => buildStrip(target))
   const [phase, setPhase] = useState<Phase>('idle')
+  const [hasRolled, setHasRolled] = useState(false)
   const [leverHover, setLeverHover] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const rowH = bigButton ? KIOSK_ITEM_H : ITEM_H
+  const reelFontSize = bigButton ? 20 : 12
+  const spinDuration = spinMs ?? (bigButton ? KIOSK_SPIN_MS : SPIN_MS)
 
   useEffect(() => {
     return () => {
@@ -44,7 +54,7 @@ export default function RoleSlotMachine({
     }
   }, [])
 
-  const finalY = -(FILLER_COUNT - 1) * ITEM_H
+  const finalY = -(FILLER_COUNT - 1) * rowH
   const atRest = phase === 'idle' || phase === 'reset'
   /** Strip index aligned with the payline center row for the current transform */
   const paylineCenterIdx = atRest ? 1 : FILLER_COUNT - 1
@@ -66,16 +76,24 @@ export default function RoleSlotMachine({
         setPhase('spinning')
         timeoutRef.current = setTimeout(() => {
           setPhase('done')
+          setHasRolled(true)
           onSpinChange?.(false)
           onResolved(next)
           playClickSound()
-        }, SPIN_MS)
+        }, spinDuration)
       })
     })
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: bigButton ? 'stretch' : 'center',
+        width: '100%',
+      }}
+    >
       <div
         style={{
           position: 'relative',
@@ -115,8 +133,8 @@ export default function RoleSlotMachine({
           style={{
             display: 'flex',
             flexDirection: bigButton ? 'column' : 'row',
-            alignItems: 'center',
-            gap: bigButton ? 16 : 12,
+            alignItems: bigButton ? 'stretch' : 'center',
+            gap: bigButton ? 28 : 12,
             overflow: 'visible',
             paddingRight: bigButton ? 0 : 6,
           }}
@@ -127,20 +145,32 @@ export default function RoleSlotMachine({
               position: 'relative',
               width: bigButton ? '100%' : undefined,
               flex: bigButton ? '0 0 auto' : 1,
-              height: ITEM_H * WINDOW_ROWS,
+              height: rowH * WINDOW_ROWS,
               overflow: 'hidden',
               background: 'var(--color-tomo-yellow)',
               border: '2px solid var(--color-border)',
             }}
           >
             <div
-              className={phase === 'spinning' ? 'slot-reel-blur' : undefined}
+              className={
+                phase === 'spinning'
+                  ? bigButton
+                    ? 'slot-reel-blur-kiosk'
+                    : 'slot-reel-blur'
+                  : undefined
+              }
               style={{
                 transform: `translateY(${atRest ? 0 : finalY}px)`,
                 transition:
                   phase === 'spinning'
-                    ? `transform ${SPIN_MS}ms cubic-bezier(0.1, 0.82, 0.14, 1)`
+                    ? `transform ${spinDuration}ms ${bigButton ? 'cubic-bezier(0.18, 0.92, 0.38, 1)' : 'cubic-bezier(0.1, 0.82, 0.14, 1)'}`
                     : 'none',
+                ...(phase === 'spinning' && bigButton
+                  ? {
+                      animationDuration: `${spinDuration}ms`,
+                      animationTimingFunction: 'cubic-bezier(0.18, 0.92, 0.38, 1)',
+                    }
+                  : {}),
               }}
             >
               {strip.map((role, i) => {
@@ -150,7 +180,7 @@ export default function RoleSlotMachine({
                     key={i}
                     className={isPeek ? 'slot-reel-peek' : undefined}
                     style={{
-                      height: ITEM_H,
+                      height: rowH,
                       boxSizing: 'border-box',
                       display: 'flex',
                       alignItems: 'center',
@@ -161,11 +191,11 @@ export default function RoleSlotMachine({
                           : 'none',
                       fontFamily: 'var(--font-mono)',
                       fontWeight: 700,
-                      fontSize: 12,
+                      fontSize: reelFontSize,
                       letterSpacing: 0.4,
                       color: 'var(--color-ink)',
                       whiteSpace: 'nowrap',
-                      padding: '0 8px',
+                      padding: bigButton ? '0 16px' : '0 8px',
                     }}
                   >
                     {role.toUpperCase()}
@@ -181,8 +211,8 @@ export default function RoleSlotMachine({
                 position: 'absolute',
                 left: 0,
                 right: 0,
-                top: ITEM_H,
-                height: ITEM_H,
+                top: rowH,
+                height: rowH,
                 boxSizing: 'border-box',
                 boxShadow:
                   'inset 0 2px 0 0 var(--color-border), inset 0 -2px 0 0 var(--color-border)',
@@ -199,7 +229,7 @@ export default function RoleSlotMachine({
               disabled={phase === 'spinning'}
               aria-label="Randomize role"
               className={phase === 'spinning' ? 'slot-button-pressed' : undefined}
-              style={bigButtonStyle(phase === 'spinning')}
+              style={bigButtonStyle(phase === 'spinning', hasRolled)}
             >
               {phase === 'spinning' ? 'Spinning…' : phase === 'done' ? 'Reroll' : 'Randomize'}
             </button>
@@ -322,22 +352,34 @@ const leverRailStyle: React.CSSProperties = {
   background: 'var(--color-border)',
 }
 
-function bigButtonStyle(disabled: boolean): React.CSSProperties {
-  return {
+function bigButtonStyle(disabled: boolean, outline: boolean): React.CSSProperties {
+  const base: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
     boxSizing: 'border-box',
-    background: disabled ? 'var(--color-ink-muted)' : 'var(--color-ink)',
-    color: 'var(--color-tomo-yellow)',
-    border: '1.5px solid var(--color-border)',
-    padding: '10px 16px',
+    border: '2px solid var(--color-border)',
+    padding: '14px 24px',
     fontFamily: 'var(--font-body)',
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: 'var(--weight-bold)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     whiteSpace: 'nowrap',
+  }
+
+  if (outline) {
+    return {
+      ...base,
+      background: 'transparent',
+      color: disabled ? 'var(--color-ink-muted)' : 'var(--color-ink)',
+    }
+  }
+
+  return {
+    ...base,
+    background: disabled ? 'var(--color-ink-muted)' : 'var(--color-ink)',
+    color: 'var(--color-tomo-yellow)',
   }
 }
 

@@ -2,6 +2,9 @@
 -- Isolated table for the launch party kiosk so entries don't mix with the main
 -- directory during the event. citizen_number starts at 180 per the brief.
 --
+-- Before go-live (after clearing test data), run scripts/reset-party-citizens.sql
+-- so numbering restarts at TOMO-0180. DELETE alone does not reset the sequence.
+--
 -- After the event, migrate entries into the main table with:
 --
 --   insert into citizens (name, relation_to_tomo, place_of_issue, photo_url)

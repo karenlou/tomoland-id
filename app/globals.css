@@ -632,6 +632,28 @@ body {
   animation: slot-reel-blur 2.8s ease-out both;
 }
 
+@keyframes slot-reel-blur-kiosk {
+  0% {
+    filter: blur(0);
+  }
+  10% {
+    filter: blur(3px);
+  }
+  55% {
+    filter: blur(2px);
+  }
+  72% {
+    filter: blur(0);
+  }
+  100% {
+    filter: blur(0);
+  }
+}
+
+.slot-reel-blur-kiosk {
+  animation: slot-reel-blur-kiosk 1.4s cubic-bezier(0.18, 0.92, 0.38, 1) both;
+}
+
 @keyframes slot-knob-pull {
   0% {
     transform: translate(-50%, 0);
@@ -834,7 +856,8 @@ body {
 
 .kiosk-step-action-reveal {
   display: flex;
-  justify-content: center;
+  justify-content: stretch;
+  width: 100%;
   animation: kiosk-step-action-reveal 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 

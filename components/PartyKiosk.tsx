@@ -1,23 +1,25 @@
 'use client'
 
 import { useCallback, useRef, useState, type RefObject } from 'react'
-import CameraCapture from './CameraCapture'
+import CameraCapture, { CAMERA_BODY_W } from './CameraCapture'
 import PartyCard from './PartyCard'
 import RoleSlotMachine from './RoleSlotMachine'
 import { supabase } from '@/lib/supabase'
 import { isProfane } from '@/lib/profanity'
-import { CARD_H, CARD_W, PARTY_CARD_H, PARTY_CARD_SCALE, PARTY_CARD_W } from '@/lib/cardConstants'
+import { CARD_BORDER, CARD_H, CARD_W, CARD_SHADOW, PARTY_CARD_H, PARTY_CARD_SCALE, PARTY_CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
 
 type Step = 'name' | 'role' | 'photo' | 'saving' | 'preview'
 
 const PLACE_OF_ISSUE = 'San Francisco, CA'
-/** Scale the full-resolution export down to a sane on-screen preview size */
-const PREVIEW_DISPLAY_SCALE = 0.38
+/** Content column matches retro camera body width */
+const KIOSK_CONTENT_W = CAMERA_BODY_W
+/** Scale card preview to the same width as the camera graphic */
+const PREVIEW_DISPLAY_SCALE = KIOSK_CONTENT_W / PARTY_CARD_W
 const PREVIEW_CONTENT_GAP = 28
-/** Form column matches scaled card preview width */
-const STEP_W = PARTY_CARD_W * PREVIEW_DISPLAY_SCALE
+const STEP_GAP = 12
+const ACTION_GAP = 16
 
 function sanitizeFilename(name: string): string {
   return name.trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, ' ').trim() || 'Guest'
@@ -32,13 +34,21 @@ function PartyCardPreview({
   preview?: boolean
   exportRef?: RefObject<HTMLDivElement | null>
 }) {
+  const visibleW = PARTY_CARD_W * PREVIEW_DISPLAY_SCALE
+  const visibleH = PARTY_CARD_H * PREVIEW_DISPLAY_SCALE
+  const frameRadius = cardRadiusAtScale(PREVIEW_DISPLAY_SCALE * PARTY_CARD_SCALE)
+
   return (
     <div
+      className="id-surface"
       style={{
-        width: PARTY_CARD_W * PREVIEW_DISPLAY_SCALE,
-        height: PARTY_CARD_H * PREVIEW_DISPLAY_SCALE,
+        width: visibleW,
+        height: visibleH,
         overflow: 'hidden',
         flexShrink: 0,
+        borderRadius: frameRadius,
+        border: CARD_BORDER,
+        boxShadow: CARD_SHADOW,
       }}
     >
       <div
@@ -257,10 +267,10 @@ export default function PartyKiosk() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
+            alignItems: 'stretch',
             gap: PREVIEW_CONTENT_GAP,
             width: '100%',
-            maxWidth: STEP_W,
+            maxWidth: KIOSK_CONTENT_W,
           }}
         >
           <PartyCardPreview citizen={previewCitizen} preview />
@@ -268,12 +278,12 @@ export default function PartyKiosk() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 14,
+              gap: STEP_GAP,
               width: '100%',
             }}
           >
             <p style={stepPromptStyle}>What&apos;s your name?</p>
-            <div style={{ display: 'flex', gap: 8, width: '100%', alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', gap: 16, width: '100%', alignItems: 'stretch' }}>
               <input
                 type="text"
                 value={name}
@@ -308,20 +318,21 @@ export default function PartyKiosk() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: 14,
+            gap: ACTION_GAP,
             width: '100%',
-            maxWidth: STEP_W,
+            maxWidth: KIOSK_CONTENT_W,
           }}
         >
-          <p style={stepPromptStyle}>What&apos;s your role in Tomoland?</p>
-          <RoleSlotMachine onResolved={setRole} onSpinChange={setRoleSpinning} bigButton />
-          {error && <p style={errorStyle}>{error}</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: STEP_GAP, width: '100%' }}>
+            <p style={stepPromptStyle}>What&apos;s your role in Tomoland?</p>
+            <RoleSlotMachine onResolved={setRole} onSpinChange={setRoleSpinning} bigButton />
+            {error && <p style={errorStyle}>{error}</p>}
+          </div>
           <StepActionSlot open={!!role}>
             <button
               type="button"
               onClick={goToPhoto}
-              style={stepBtnStyle(roleSpinning)}
+              style={{ ...stepBtnStyle(roleSpinning), width: '100%' }}
               disabled={roleSpinning}
             >
               Next →
@@ -335,22 +346,27 @@ export default function PartyKiosk() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: 14,
+            gap: ACTION_GAP,
             width: '100%',
-            maxWidth: STEP_W,
+            maxWidth: KIOSK_CONTENT_W,
           }}
         >
-          <p style={stepPromptStyle}>Smile!</p>
-          <CameraCapture
-            onCapture={handleCapture}
-            onClear={handleClear}
-            capturedUrl={photoPreviewUrl}
-            autoStart
-          />
-          {error && <p style={errorStyle}>{error}</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: STEP_GAP, width: '100%' }}>
+            <p style={stepPromptStyle}>Smile!</p>
+            <CameraCapture
+              onCapture={handleCapture}
+              onClear={handleClear}
+              capturedUrl={photoPreviewUrl}
+              autoStart
+            />
+            {error && <p style={errorStyle}>{error}</p>}
+          </div>
           <StepActionSlot open={!!photoPreviewUrl}>
-            <button type="button" onClick={handleSave} style={stepBtnStyle(false)}>
+            <button
+              type="button"
+              onClick={handleSave}
+              style={{ ...stepBtnStyle(false), width: '100%' }}
+            >
               Looks good →
             </button>
           </StepActionSlot>
@@ -360,21 +376,25 @@ export default function PartyKiosk() {
       {step === 'saving' && (
         <div
           style={{
+            position: 'fixed',
+            inset: 0,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 16,
+            background: 'var(--color-paper)',
           }}
         >
           <img
             src="/RetroMac.png"
             alt=""
             aria-hidden
-            width={96}
-            height={96}
+            width={192}
+            height={192}
             style={{ imageRendering: 'pixelated', display: 'block' }}
           />
-          <p style={stepPromptStyle}>Printing...</p>
+          <p style={{ ...stepPromptStyle, textAlign: 'center' }}>Printing...</p>
         </div>
       )}
 
@@ -383,25 +403,26 @@ export default function PartyKiosk() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: 28,
+            gap: ACTION_GAP,
+            width: '100%',
+            maxWidth: KIOSK_CONTENT_W,
           }}
         >
           <PartyCardPreview citizen={savedCitizen} exportRef={exportRef} />
 
           {error && <p style={errorStyle}>{error}</p>}
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 12, width: '100%' }}>
             <button
               type="button"
               onClick={handleDownload}
               disabled={downloading}
               aria-label="Download ID"
-              style={stepIconBtnStyle(downloading)}
+              style={stepPreviewBtnStyle(downloading)}
             >
               <DownloadIcon />
             </button>
-            <button type="button" onClick={resetAll} style={stepSecondaryBtnStyle}>
+            <button type="button" onClick={resetAll} style={stepPreviewSecondaryBtnStyle}>
               Done
             </button>
           </div>
@@ -413,10 +434,10 @@ export default function PartyKiosk() {
 
 const stepPromptStyle: React.CSSProperties = {
   fontFamily: 'var(--font-body)',
-  fontSize: 16,
+  fontSize: 24,
   color: 'var(--color-ink)',
   margin: 0,
-  textAlign: 'center',
+  textAlign: 'left',
   width: '100%',
 }
 
@@ -424,11 +445,11 @@ const stepInputStyle: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
   fontFamily: 'var(--font-body)',
-  fontSize: 'var(--text-body)',
+  fontSize: 24,
   color: 'var(--color-ink)',
   background: 'transparent',
-  border: '1.5px solid var(--color-border)',
-  padding: '10px 12px',
+  border: '2px solid var(--color-border)',
+  padding: '14px 18px',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -438,42 +459,49 @@ function stepBtnStyle(disabled: boolean): React.CSSProperties {
     flexShrink: 0,
     background: disabled ? 'var(--color-ink-muted)' : 'var(--color-ink)',
     color: 'var(--color-tomo-yellow)',
-    border: '1.5px solid var(--color-border)',
-    padding: '10px 16px',
+    border: '2px solid var(--color-border)',
+    padding: '14px 24px',
     fontFamily: 'var(--font-body)',
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: 'var(--weight-bold)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     whiteSpace: 'nowrap',
   }
 }
 
-function stepIconBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    ...stepBtnStyle(disabled),
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '10px 12px',
-    minWidth: 44,
-  }
-}
-
 const stepSecondaryBtnStyle: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--color-ink)',
-  border: '1.5px solid var(--color-border)',
-  padding: '10px 16px',
+  border: '2px solid var(--color-border)',
+  padding: '14px 24px',
   fontFamily: 'var(--font-body)',
-  fontSize: 14,
+  fontSize: 20,
   fontWeight: 'var(--weight-bold)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 }
 
+function stepPreviewBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    ...stepBtnStyle(disabled),
+    flex: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+  }
+}
+
+const stepPreviewSecondaryBtnStyle: React.CSSProperties = {
+  ...stepSecondaryBtnStyle,
+  flex: 1,
+  minWidth: 0,
+  textAlign: 'center',
+}
+
 function DownloadIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M12 4v10M8 10l4 4 4-4"
         stroke="currentColor"
@@ -488,8 +516,8 @@ function DownloadIcon() {
 
 const errorStyle: React.CSSProperties = {
   fontFamily: 'var(--font-body)',
-  fontSize: 16,
+  fontSize: 24,
   color: 'var(--color-error)',
   margin: 0,
-  textAlign: 'center',
+  textAlign: 'left',
 }
