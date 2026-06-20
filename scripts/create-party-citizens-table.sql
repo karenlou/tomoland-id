@@ -7,13 +7,12 @@
 --
 -- After the event, migrate entries into the main table with:
 --
---   insert into citizens (name, relation_to_tomo, place_of_issue, photo_url)
---   select name, relation_to_tomo, place_of_issue, photo_url
---   from party_citizens
---   order by created_at asc;
+--   scripts/migrate-party-to-main.sql
 --
--- (citizens assigns its own fresh citizen_number/tomoland_id, so those columns
--- are deliberately not copied.)
+-- That copies kiosk citizen_number / tomoland_id into citizens. If guests were
+-- already migrated with fresh directory numbers, run:
+--
+--   scripts/fix-party-citizen-numbers.sql
 
 create table if not exists party_citizens (
   id uuid primary key default gen_random_uuid(),

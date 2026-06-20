@@ -1,4 +1,5 @@
 import { randomRole } from '@/lib/roles'
+import { normalizeCitizenName } from '@/lib/normalizeCitizenName'
 import type { Citizen } from '@/types'
 
 export function isEphemeralMode(): boolean {
@@ -18,7 +19,7 @@ export function createEphemeralCitizen(
   return {
     id,
     citizen_number,
-    name: name.trim(),
+    name: normalizeCitizenName(name),
     relation_to_tomo: relationToTomo ?? randomRole(),
     place_of_issue: 'San Francisco, CA',
     photo_url: photoUrl,

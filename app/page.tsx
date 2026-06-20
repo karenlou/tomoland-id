@@ -42,9 +42,9 @@ export default async function DirectoryPage() {
       <header
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'flex-end',
           justifyContent: 'space-between',
-          marginBottom: 8,
+          marginBottom: 10,
           flexShrink: 0,
         }}
       >
@@ -61,7 +61,7 @@ export default async function DirectoryPage() {
           >
             2026
           </span>
-          <h1 style={{ margin: 0 }}>
+          <h1 style={{ margin: 0, lineHeight: 1 }}>
             <a
               href="/"
               data-sound-click="off"

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { createEphemeralCitizen } from '@/lib/ephemeralCitizen'
+import { nextCitizenNumber } from '@/lib/nextCitizenNumber'
+import { normalizeCitizenName } from '@/lib/normalizeCitizenName'
 import { isValidRole, randomRole } from '@/lib/roles'
 import { isProfane } from '@/lib/profanity'
 
@@ -30,18 +32,20 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate name
-  if (!name?.trim()) {
+  const trimmedName = name?.trim() ?? ''
+  if (!trimmedName) {
     return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
   }
-  if (name.trim().length > 60) {
+  if (trimmedName.length > 60) {
     return NextResponse.json({ error: 'Name is too long.' }, { status: 400 })
   }
-  if (isProfane(name)) {
+  if (isProfane(trimmedName)) {
     return NextResponse.json(
       { error: 'Name contains inappropriate content.' },
       { status: 400 },
     )
   }
+  const normalizedName = normalizeCitizenName(trimmedName)
 
   // Relation must be one of the canonical roles the slot machine can land on —
   // never trust a client-supplied string straight into the public directory.
@@ -62,7 +66,7 @@ export async function POST(req: NextRequest) {
   if (EPHEMERAL) {
     return NextResponse.json(
       {
-        citizen: createEphemeralCitizen(name, photoUrl ?? null, relation),
+        citizen: createEphemeralCitizen(trimmedName, photoUrl ?? null, relation),
         deviceToken: ownerToken,
       },
       { status: 201 },
@@ -98,10 +102,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const citizenNumber = await nextCitizenNumber(supabase)
+
   const { data, error } = await supabase
     .from('citizens')
     .insert({
-      name: name.trim(),
+      citizen_number: citizenNumber,
+      name: normalizedName,
       relation_to_tomo: relation,
       place_of_issue: 'San Francisco, CA',
       photo_url: photoUrl ?? null,
@@ -118,7 +125,8 @@ export async function POST(req: NextRequest) {
       const { data: fallback, error: fallbackError } = await supabase
         .from('citizens')
         .insert({
-          name: name.trim(),
+          citizen_number: citizenNumber,
+          name: normalizedName,
           relation_to_tomo: relation,
           place_of_issue: 'San Francisco, CA',
           photo_url: photoUrl ?? null,

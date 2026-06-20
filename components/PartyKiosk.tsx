@@ -6,6 +6,7 @@ import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
 import { supabase } from '@/lib/supabase'
 import { isProfane } from '@/lib/profanity'
+import { normalizeCitizenName } from '@/lib/normalizeCitizenName'
 import { CARD_BORDER, CARD_H, CARD_W, CARD_SHADOW, PARTY_CARD_H, PARTY_CARD_SCALE, PARTY_CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
@@ -194,7 +195,7 @@ export default function PartyKiosk() {
       const { data, error: insertError } = await supabase
         .from('party_citizens')
         .insert({
-          name: name.trim(),
+          name: normalizeCitizenName(name),
           relation_to_tomo: role,
           place_of_issue: PLACE_OF_ISSUE,
           photo_url: photoUrl,
