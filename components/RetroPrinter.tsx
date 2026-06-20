@@ -15,8 +15,10 @@ const SPOTLIGHT_H = Math.round(CARD_H * SCALE)
 const PRINT_VISUAL_SCALE = PRINT_W / SPOTLIGHT_W
 const PRINT_DURATION_MS = 4200
 const PRINT_HOLD_MS = 500
-/** Bottom edge of printer body — card clip starts below this */
-const PRINTER_BOTTOM = 58
+/** Bottom edge of printer body — card clip starts below this. Matches the
+ * printer graphic's actual rendered height (body + gray base strip); any
+ * larger value leaves a gap here that shows the page's yellow through. */
+const PRINTER_BOTTOM = 52
 const SLOT_Y = PRINTER_BOTTOM
 
 const SCALE_MS = 1200
