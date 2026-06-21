@@ -1,4 +1,5 @@
 import { SPOTLIGHT_SLEEVE_W } from '@/lib/cardConstants'
+import { xShareIntentUrl } from '@/lib/xShareTemplate'
 
 /** Long enough to always overflow the narrow list column at this font size,
  * so it gets clipped flush with the text's full width rather than falling short. */
@@ -28,6 +29,29 @@ const LEFT_PANEL_H = 160
 const RIGHT_PANEL_H = Math.round(LEFT_PANEL_H * (TAG_FULL_H / TAG_RECT_H))
 
 const displayFont = "'Reform ST Trial', 'Arial Black', Impact, sans-serif"
+
+const adLinkStyle: React.CSSProperties = {
+  color: 'inherit',
+  textDecoration: 'underline',
+  textUnderlineOffset: 2,
+}
+
+const adSteps: React.ReactNode[] = [
+  <>
+    Post your newly-issued ID on{' '}
+    <a
+      href={xShareIntentUrl()}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={adLinkStyle}
+    >
+      X
+    </a>{' '}
+    and tag @tomo
+  </>,
+  'We will reach out and send you your physical ID',
+  'Now you’re officially a Tomosapien!!!!!!!!!!!!!!!',
+]
 
 /**
  * Per Figma node 80:3632 — a yellow-pages-style classified ad for getting a
@@ -102,11 +126,7 @@ export default function PrintAd() {
               lineHeight: 1.3,
             }}
           >
-            {[
-              'Post your newly-issued ID on X and tag @tomo',
-              'We will reach out and send you your physical ID',
-              'Now you’re officially a Tomosapien!!!!!!!!!!!!!!!',
-            ].map((step, i) => (
+            {adSteps.map((step, i) => (
               <div key={i}>
                 {i > 0 && (
                   <p style={{ margin: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>

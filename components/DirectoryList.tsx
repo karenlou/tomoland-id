@@ -510,7 +510,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
                   lineHeight: 1,
                 }}
               >
-                {filtered.length} citizen{filtered.length !== 1 ? 's' : ''}
+                {filtered.length} TOMOSAPIENS AND COUNTING
               </p>
               <div style={{ flex: '1 1 auto', maxWidth: 220, minWidth: 0 }}>
                 <SearchBar value={query} onChange={setQuery} />

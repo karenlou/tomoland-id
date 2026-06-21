@@ -6,6 +6,7 @@ import FlippableId from './FlippableId'
 import { IdSleeveShell, getSleeveMetrics } from './IdSleeve'
 import { CARD_H, CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
 import { playPrinterSound, stopPrinterSound } from '@/lib/clickSound'
+import { xShareIntentUrl } from '@/lib/xShareTemplate'
 import type { Citizen } from '@/types'
 
 const PRINT_W = 340
@@ -175,10 +176,7 @@ export default function RetroPrinter({ citizen, onComplete }: RetroPrinterProps)
 
   function handlePostToX() {
     if (!downloaded) return
-    const text =
-      'Just became the newest resident of @tomo land 💛\nExcited for tomo to help me [insert hopes, dreams, etc.]'
-    const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
-    window.open(intent, '_blank', 'noopener,noreferrer')
+    window.open(xShareIntentUrl(), '_blank', 'noopener,noreferrer')
   }
 
   return (

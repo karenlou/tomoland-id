@@ -3,7 +3,7 @@ import ClickSoundProvider from '@/components/ClickSoundProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Tomoland — Yellow Pages',
+  title: 'Tomosapiens of Tomoland',
   description: 'The official directory of Tomoland citizens.',
 }
 
