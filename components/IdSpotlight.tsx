@@ -1,8 +1,10 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import CitizenCard from './CitizenCard'
 import IdSleeve from './IdSleeve'
 import {
+  CARD_BORDER_RADIUS,
   CARD_DEPTH_SHADOW,
   CARD_H,
   CARD_W,
@@ -37,6 +39,8 @@ export function WelcomeBar({
   onViewMyId,
   onReissue,
   onDelete,
+  onDownload,
+  downloading,
 }: {
   hasOwnId: boolean
   isOwnSelected?: boolean
@@ -44,6 +48,8 @@ export function WelcomeBar({
   onViewMyId?: () => void
   onReissue?: () => void
   onDelete?: () => void
+  onDownload?: () => void
+  downloading?: boolean
 }) {
   return (
     <div
@@ -146,6 +152,18 @@ export function WelcomeBar({
             padding: '8px 14px',
           }}
         >
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={downloading}
+            style={{
+              ...manageBtnStyle,
+              opacity: downloading ? 0.6 : 1,
+              cursor: downloading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {downloading ? 'Saving…' : 'Download'}
+          </button>
           <button type="button" onClick={onReissue} style={manageBtnStyle}>
             Re-issue ID
           </button>
@@ -171,6 +189,25 @@ export default function IdSpotlight({
   const isOwnSelected = Boolean(citizen && myCitizenId && citizen.id === myCitizenId)
   const cardH = Math.round(CARD_H * SCALE)
   const cardRadius = cardRadiusAtScale(SCALE)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  async function handleDownload() {
+    if (!cardRef.current || downloading || !citizen) return
+    setDownloading(true)
+    try {
+      const { toPng } = await import('html-to-image')
+      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2 })
+      const link = document.createElement('a')
+      link.download = `${citizen.tomoland_id || 'tomoland-id'}.png`
+      link.href = dataUrl
+      link.click()
+    } catch {
+      // best-effort — no on-screen fallback needed here, the card is always visible
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const cardBlock = (
     <div
@@ -211,7 +248,20 @@ export default function IdSpotlight({
                   height: CARD_H,
                 }}
               >
-                <CitizenCard citizen={citizen} />
+                {/* Download target has no transform of its own — html-to-image
+                 * mis-sizes captures when the ref'd node itself is the one being
+                 * scaled, so the scale stays on the parent and this stays plain. */}
+                <div
+                  ref={cardRef}
+                  style={{
+                    width: CARD_W,
+                    height: CARD_H,
+                    borderRadius: CARD_BORDER_RADIUS,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <CitizenCard citizen={citizen} />
+                </div>
               </div>
             </div>
           </div>
@@ -250,6 +300,8 @@ export default function IdSpotlight({
         onViewMyId={onViewMyId}
         onReissue={onReissue}
         onDelete={onDelete}
+        onDownload={handleDownload}
+        downloading={downloading}
       />
       {cardBlock}
     </div>

@@ -131,23 +131,6 @@ export default async function DirectoryPage() {
       <Suspense fallback={null}>
         <DirectoryList initialCitizens={citizens} />
       </Suspense>
-
-      <p
-        style={{
-          position: 'absolute',
-          right: 48,
-          bottom: 28,
-          margin: 0,
-          fontFamily: 'var(--font-body)',
-          fontSize: 13,
-          fontWeight: 'var(--weight-regular)',
-          color: '#000000',
-          textAlign: 'right',
-          flexShrink: 0,
-        }}
-      >
-        Contact: +1 (415) 770 - 0048
-      </p>
     </div>
   )
 }

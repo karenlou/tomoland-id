@@ -13,7 +13,8 @@ const SPOTLIGHT_W = 400
 const SCALE = SPOTLIGHT_W / CARD_W
 const SPOTLIGHT_H = Math.round(CARD_H * SCALE)
 const PRINT_VISUAL_SCALE = PRINT_W / SPOTLIGHT_W
-const PRINT_DURATION_MS = 4200
+/** Keep in sync with .retro-print-emerge's animation-duration in globals.css */
+const PRINT_DURATION_MS = 4800
 const PRINT_HOLD_MS = 500
 /** Bottom edge of printer body — card clip starts below this. Matches the
  * printer graphic's actual rendered height (body + gray base strip); any

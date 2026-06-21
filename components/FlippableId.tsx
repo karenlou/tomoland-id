@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import CitizenCard, { CitizenCardBack } from './CitizenCard'
 import { getSleeveMetrics } from './IdSleeve'
-import { CARD_H, CARD_W } from '@/lib/cardConstants'
+import { CARD_BORDER_RADIUS, CARD_H, CARD_W } from '@/lib/cardConstants'
 import type { Citizen } from '@/types'
 
 interface PointerState {
@@ -126,6 +126,16 @@ export default function FlippableId({
     height: CARD_H,
   }
 
+  /** Download target has no transform of its own — html-to-image mis-sizes
+   * captures when the ref'd node itself is the one being scaled, so the
+   * scale stays on the parent (scaledCardStyle) and this stays plain. */
+  const cardFaceInnerStyle: React.CSSProperties = {
+    width: CARD_W,
+    height: CARD_H,
+    borderRadius: CARD_BORDER_RADIUS,
+    overflow: 'hidden',
+  }
+
   return (
     <div className="id-surface" style={{ perspective: 1100, perspectiveOrigin: '50% 45%' }}>
       <div
@@ -165,8 +175,10 @@ export default function FlippableId({
           <div style={faceWrapStyle(false)}>
             <div style={sleeveChromeStyle} />
             <div style={cardWindowStyle}>
-              <div ref={frontCardRef} style={scaledCardStyle}>
-                <CitizenCard citizen={citizen} />
+              <div style={scaledCardStyle}>
+                <div ref={frontCardRef} style={cardFaceInnerStyle}>
+                  <CitizenCard citizen={citizen} />
+                </div>
               </div>
             </div>
             <div style={plasticOverlayStyle} />
@@ -190,7 +202,9 @@ export default function FlippableId({
             <div style={sleeveChromeStyle} />
             <div style={cardWindowStyle}>
               <div style={scaledCardStyle}>
-                <CitizenCardBack citizen={citizen} />
+                <div style={cardFaceInnerStyle}>
+                  <CitizenCardBack citizen={citizen} />
+                </div>
               </div>
             </div>
             <div style={plasticOverlayStyle} />

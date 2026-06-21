@@ -240,7 +240,9 @@ export default function RoleSlotMachine({
                   ? bigButton
                     ? 'slot-reel-blur-kiosk'
                     : 'slot-reel-blur'
-                  : undefined
+                  : phase === 'done'
+                    ? undefined
+                    : 'slot-reel-idle-blur'
               }
               style={{
                 transform: `translateY(${atRest ? 0 : finalY}px)`,
@@ -324,7 +326,7 @@ export default function RoleSlotMachine({
               onMouseLeave={() => setLeverHover(false)}
               style={{
                 position: 'relative',
-                width: 22,
+                width: KNOB_SIZE + 4,
                 height: ITEM_H * WINDOW_ROWS,
                 flexShrink: 0,
                 overflow: 'visible',
@@ -351,8 +353,8 @@ export default function RoleSlotMachine({
                       : knobTransition === 'dip'
                         ? `transform ${DIP_MS}ms ease-out`
                         : 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                  width: 20,
-                  height: 20,
+                  width: KNOB_SIZE,
+                  height: KNOB_SIZE,
                   border: 'none',
                   background: 'transparent',
                   cursor: phase === 'spinning' ? 'default' : 'grab',
@@ -387,13 +389,13 @@ export default function RoleSlotMachine({
   )
 }
 
-const KNOB_SIZE = 20
-const BURST_CANVAS = 48
+const KNOB_SIZE = 26
+const BURST_CANVAS = 62
 const BURST_LINES = 12
 /** Gap between knob corners and where burst lines begin */
-const BURST_GAP = 5
+const BURST_GAP = 6
 const BURST_INNER = KNOB_SIZE / 2 + BURST_GAP
-const BURST_LINE_LEN = 12
+const BURST_LINE_LEN = 16
 
 function LeverBurst() {
   const center = BURST_CANVAS / 2

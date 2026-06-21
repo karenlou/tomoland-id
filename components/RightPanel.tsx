@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import IdSpotlight from './IdSpotlight'
 import CreatePanel from './CreatePanel'
 import RetroPrinter from './RetroPrinter'
+import PrintAd from './PrintAd'
 import type { Citizen } from '@/types'
 
 export type RightPanelMode = 'view' | 'create' | 'print'
@@ -77,15 +78,26 @@ export default function RightPanel({
     content = <CreatePanel onCancel={onCancelCreate} onIssue={onIssue} />
   } else {
     content = (
-      <IdSpotlight
-        citizen={citizen}
-        onGetId={onGetId}
-        onViewMyId={onViewMyId}
-        onReissue={onReissue}
-        onDelete={onDelete}
-        myCitizenId={myCitizenId}
-        revealFooter={revealFooter}
-      />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          width: '100%',
+        }}
+      >
+        <IdSpotlight
+          citizen={citizen}
+          onGetId={onGetId}
+          onViewMyId={onViewMyId}
+          onReissue={onReissue}
+          onDelete={onDelete}
+          myCitizenId={myCitizenId}
+          revealFooter={revealFooter}
+        />
+        <PrintAd />
+      </div>
     )
   }
 

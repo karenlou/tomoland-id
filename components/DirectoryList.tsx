@@ -208,10 +208,39 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [justGrew, setJustGrew] = useState(false)
   const pointerRef = useRef({ x: 0, y: 0 })
   const myCitizenIdRef = useRef<string | null>(null)
+  const rightColRef = useRef<HTMLDivElement>(null)
+  const rightContentRef = useRef<HTMLDivElement>(null)
+  const [rightScale, setRightScale] = useState(1)
 
   useEffect(() => {
     myCitizenIdRef.current = myCitizenId
   }, [myCitizenId])
+
+  // Scale the spotlight+ad block up to fill the same height as the directory
+  // list beside it, rather than leaving empty space below a small, top-aligned
+  // block. Measured via offsetHeight (layout size, ignoring the very transform
+  // this effect applies) so it doesn't feed back into its own measurement.
+  // Uses the full height (tail included) so the scaled block never needs to
+  // overflow its container — it's sized to fit entirely within it instead.
+  useEffect(() => {
+    if (panelMode !== 'view') return
+    const col = rightColRef.current
+    const content = rightContentRef.current
+    if (!col || !content) return
+
+    const recompute = () => {
+      const containerH = col.clientHeight
+      const contentH = content.offsetHeight
+      if (containerH <= 0 || contentH <= 0) return
+      setRightScale(Math.max(containerH / contentH, 1))
+    }
+
+    recompute()
+    const observer = new ResizeObserver(recompute)
+    observer.observe(col)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [panelMode])
 
   useEffect(() => {
     let cancelled = false
@@ -479,6 +508,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       </div>
 
       <div
+        ref={rightColRef}
         style={{
           flex: 1,
           minWidth: 0,
@@ -489,11 +519,20 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           justifyContent: isCreating ? 'safe center' : 'flex-start',
           minHeight: 0,
           overflowY: 'auto',
-          overflowX: isCreating ? 'visible' : 'hidden',
+          overflowX: 'visible',
           transition: `flex-basis 0.55s ${flexEase}`,
         }}
       >
-        <div style={{ width: SPOTLIGHT_SLEEVE_W, maxWidth: '100%', flexShrink: 0 }}>
+        <div
+          ref={rightContentRef}
+          style={{
+            width: SPOTLIGHT_SLEEVE_W,
+            maxWidth: '100%',
+            flexShrink: 0,
+            transform: panelMode === 'view' ? `scale(${rightScale})` : undefined,
+            transformOrigin: 'top center',
+          }}
+        >
         <RightPanel
           mode={panelMode}
           citizen={hoveredCitizen}
