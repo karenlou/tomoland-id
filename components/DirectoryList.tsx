@@ -24,6 +24,51 @@ interface DirectoryListProps {
 const DOTS_FILL = '·'.repeat(60)
 const META_INDENT = 20
 
+/** `el`'s left/top relative to `root`, walking the offsetParent chain rather
+ * than the DOM parent chain — layout-based (transform-independent) and
+ * correct even when `root` itself is the positioning context (it has its own
+ * transform applied, which makes it a valid offsetParent stop point). */
+function cumulativeOffset(el: HTMLElement, root: HTMLElement) {
+  let left = 0
+  let top = 0
+  let node: HTMLElement | null = el
+  while (node && node !== root) {
+    left += node.offsetLeft
+    top += node.offsetTop
+    node = node.offsetParent as HTMLElement | null
+  }
+  return { left, top }
+}
+
+/** PrintAd's speech-bubble tail intentionally renders past its own box via
+ * absolute positioning, so `root.offsetWidth/Height` alone under-reports the
+ * rendered footprint. Check just that element rather than scanning every
+ * descendant — IdSpotlight's card has its own nested "shrink to fit" scale
+ * transform, which a generic deep scan would misread as a huge overflow
+ * (it reports pre-shrink native layout size, not the visually-scaled size).
+ *
+ * `root`'s own scale transform is anchored `top center`, and `root` is itself
+ * centered in its column — so horizontal growth is symmetric around root's
+ * center, not anchored at its left edge. A right-side-only overflow (like the
+ * tail) therefore needs *double* its distance reserved (the same slack must
+ * exist on the untouched left side too), hence maxSideDist tracks the largest
+ * single-side distance from center rather than a left-to-right span. Vertical
+ * growth has no such issue (origin is `top`, anchored at the top edge), so
+ * bottom is a plain max extent. */
+function measureFullExtent(root: HTMLElement) {
+  const centerX = root.offsetWidth / 2
+  let maxSideDist = centerX
+  let maxBottom = root.offsetHeight
+  const tail = root.querySelector('img[src="/ad-phone-tag.svg"]')
+  if (tail instanceof HTMLElement) {
+    const { left, top } = cumulativeOffset(tail, root)
+    const right = left + tail.offsetWidth
+    maxSideDist = Math.max(maxSideDist, Math.abs(right - centerX), Math.abs(left - centerX))
+    maxBottom = Math.max(maxBottom, top + tail.offsetHeight)
+  }
+  return { width: maxSideDist * 2, height: maxBottom }
+}
+
 function DirectoryRow({
   citizen,
   isHovered,
@@ -216,13 +261,16 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     myCitizenIdRef.current = myCitizenId
   }, [myCitizenId])
 
-  // Scale the spotlight+ad block up to fill the same height as the directory
+  // Scale the spotlight+ad block to fill the same height as the directory
   // list beside it, rather than leaving empty space below a small, top-aligned
-  // block. Measured via offsetHeight/Width (layout size, ignoring the very
+  // block. Measured via offset geometry (layout size, ignoring the very
   // transform this effect applies) so it doesn't feed back into its own
-  // measurement. Capped by width too — scale() grows both axes uniformly, so
-  // a height-only ratio can blow the content wider than its column on a tall
-  // directory list, clipping it at the page edge.
+  // measurement, and capped by width too — scale() grows both axes uniformly,
+  // so a height-only ratio can blow the content wider than its column on a
+  // tall/narrow viewport, clipping it at the page edge. Deliberately not
+  // floored at 1 — on a narrow column the tail can poke past the column's
+  // edge even at native size (it overflows its own box by design), so a
+  // slight shrink-below-1 is sometimes required to keep it fully visible.
   useEffect(() => {
     if (panelMode !== 'view') return
     const col = rightColRef.current
@@ -232,12 +280,14 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     const recompute = () => {
       const containerH = col.clientHeight
       const containerW = col.clientWidth
-      const contentH = content.offsetHeight
-      const contentW = content.offsetWidth
+      // The tail intentionally renders past its own box via absolute
+      // positioning, so offsetWidth/Height on `content` alone would miss it.
+      // Measure the true full extent including it instead.
+      const { width: contentW, height: contentH } = measureFullExtent(content)
       if (containerH <= 0 || contentH <= 0 || containerW <= 0 || contentW <= 0) return
       const heightScale = containerH / contentH
       const widthScale = containerW / contentW
-      setRightScale(Math.max(Math.min(heightScale, widthScale), 1))
+      setRightScale(Math.min(heightScale, widthScale))
     }
 
     recompute()
