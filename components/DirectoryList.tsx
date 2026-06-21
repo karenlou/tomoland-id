@@ -218,10 +218,11 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
   // Scale the spotlight+ad block up to fill the same height as the directory
   // list beside it, rather than leaving empty space below a small, top-aligned
-  // block. Measured via offsetHeight (layout size, ignoring the very transform
-  // this effect applies) so it doesn't feed back into its own measurement.
-  // Uses the full height (tail included) so the scaled block never needs to
-  // overflow its container — it's sized to fit entirely within it instead.
+  // block. Measured via offsetHeight/Width (layout size, ignoring the very
+  // transform this effect applies) so it doesn't feed back into its own
+  // measurement. Capped by width too — scale() grows both axes uniformly, so
+  // a height-only ratio can blow the content wider than its column on a tall
+  // directory list, clipping it at the page edge.
   useEffect(() => {
     if (panelMode !== 'view') return
     const col = rightColRef.current
@@ -230,9 +231,13 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
     const recompute = () => {
       const containerH = col.clientHeight
+      const containerW = col.clientWidth
       const contentH = content.offsetHeight
-      if (containerH <= 0 || contentH <= 0) return
-      setRightScale(Math.max(containerH / contentH, 1))
+      const contentW = content.offsetWidth
+      if (containerH <= 0 || contentH <= 0 || containerW <= 0 || contentW <= 0) return
+      const heightScale = containerH / contentH
+      const widthScale = containerW / contentW
+      setRightScale(Math.max(Math.min(heightScale, widthScale), 1))
     }
 
     recompute()
