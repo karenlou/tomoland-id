@@ -393,20 +393,20 @@ export default function CameraCapture({
 
     return (
       <div
+        data-sound-click
         style={{
           width: '100%',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
           padding: 8,
           textAlign: 'center',
+          cursor: 'pointer',
         }}
+        onClick={() => startCamera()}
       >
-        <span style={lcdTextStyle}>TAP SHUTTER</span>
-        <span style={{ ...lcdTextStyle, fontSize: 8 }}>TO START CAMERA</span>
+        <span style={{ ...lcdTextStyle, letterSpacing: 0 }}>Tap to start camera</span>
       </div>
     )
   }
