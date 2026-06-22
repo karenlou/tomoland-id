@@ -66,7 +66,7 @@ export default function RoleSlotMachine({
   const triggeredRef = useRef(false)
 
   const rowH = bigButton ? KIOSK_ITEM_H : ITEM_H
-  const reelFontSize = bigButton ? (compactButton ? 13 : 20) : 12
+  const reelFontSize = bigButton ? (compactButton ? 11 : 20) : 12
   const spinDuration = spinMs ?? (bigButton ? KIOSK_SPIN_MS : SPIN_MS)
 
   useEffect(() => {
@@ -322,11 +322,10 @@ export default function RoleSlotMachine({
                 disabled={phase === 'spinning'}
                 aria-label={phase === 'done' ? 'Reroll role' : 'Randomize role'}
                 className={phase === 'spinning' ? 'slot-button-pressed' : undefined}
-                style={compactBigButtonBezelStyle}
+                style={compactBigButtonFaceStyle(phase === 'spinning')}
               >
-                <span style={compactBigButtonFaceStyle(phase === 'spinning')}>
-                  {phase !== 'spinning' && <span aria-hidden style={compactBigButtonHighlightStyle} />}
-                </span>
+                {phase !== 'spinning' && <span aria-hidden style={compactBigButtonHighlightStyle} />}
+                <span style={compactBigButtonLabelStyle}>Roll</span>
               </button>
             ) : (
               <button
@@ -502,31 +501,19 @@ function bigButtonStyle(disabled: boolean, outline: boolean): React.CSSPropertie
 }
 
 /** Same glossy red gradient/border/sheen as RedShutterSphere (the lever's own
- * handle), applied to the existing rectangular bigButton shape instead of a
- * bordered text button — no label, the color alone reads as "press me". */
-/** Outer bezel — matches CameraCapture's shutter button ring (same gray
- * gradient/border/sheen), just rectangular instead of circular. */
-const compactBigButtonBezelStyle: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  display: 'flex',
-  padding: 6,
-  borderRadius: 10,
-  border: '3px solid var(--color-border)',
-  background: 'linear-gradient(180deg, #e8e8e8 0%, #a0a0a0 100%)',
-  boxShadow: 'inset 0 2px 0 #fff, 0 2px 0 rgba(44,37,17,0.2)',
-}
-
-/** Inner face — RedShutterSphere's own gradient/border/sheen (the lever
- * handle housed inside that same bezel). No label — the color, sheen, and
- * bezel together read as "press me" on their own. */
+ * handle), filling the existing rectangular bigButton shape directly — no
+ * outer bezel/frame around it, holding the "Roll" label. */
 function compactBigButtonFaceStyle(disabled: boolean): React.CSSProperties {
   return {
     position: 'relative',
-    flex: 1,
-    minHeight: 44,
+    width: '100%',
+    minHeight: 52,
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
-    borderRadius: 6,
+    borderRadius: 8,
     border: disabled ? '2.5px solid #2C2511' : '2.5px solid #141008',
     background: disabled
       ? 'linear-gradient(180deg, #999 0%, #666 100%)'
@@ -539,7 +526,9 @@ function compactBigButtonFaceStyle(disabled: boolean): React.CSSProperties {
 }
 
 /** Glossy white sheen — same highlight treatment as RedShutterSphere's,
- * reshaped from its ellipse to suit a wide rectangular face instead. */
+ * reshaped from its ellipse to suit a wide rectangular face instead. No
+ * z-index of its own (stack level 0), so it paints above the label below
+ * unless the label is explicitly lifted above it too. */
 const compactBigButtonHighlightStyle: React.CSSProperties = {
   position: 'absolute',
   top: 3,
@@ -549,6 +538,15 @@ const compactBigButtonHighlightStyle: React.CSSProperties = {
   borderRadius: 4,
   background: 'linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,176,176,0.28) 65%, transparent 100%)',
   pointerEvents: 'none',
+}
+
+const compactBigButtonLabelStyle: React.CSSProperties = {
+  position: 'relative',
+  zIndex: 1,
+  color: '#fff',
+  fontFamily: 'var(--font-body)',
+  fontWeight: 700,
+  fontSize: 14,
 }
 
 function MarqueeBulbs({

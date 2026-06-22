@@ -14,10 +14,14 @@ interface RightPanelProps {
   citizen: Citizen | null
   printingCitizen: Citizen | null
   myCitizenId: string | null
-  /** Mobile-only sticky effect — collapses the welcome bar + print ad
-   * together while the list scrolls down, re-expands together as soon as it
-   * scrolls back up. The ID card itself always stays visible. */
-  collapseSpotlight?: boolean
+  /** Mobile-only sticky effect — collapses the print ad once the list below
+   * starts scrolling away from the top, so the list gets more room. The ID
+   * card itself always stays visible. */
+  collapsePanels?: boolean
+  /** Mobile-only — collapses the welcome bar while the list scrolls down,
+   * re-expands as soon as it scrolls back up (independent of collapsePanels,
+   * which tracks "away from top" rather than direction). */
+  collapseWelcomeBar?: boolean
   onGetId: () => void
   onViewMyId: () => void
   onReissue: () => void
@@ -32,7 +36,8 @@ export default function RightPanel({
   citizen,
   printingCitizen,
   myCitizenId,
-  collapseSpotlight = false,
+  collapsePanels = false,
+  collapseWelcomeBar = false,
   onGetId,
   onViewMyId,
   onReissue,
@@ -100,10 +105,10 @@ export default function RightPanel({
           onDelete={onDelete}
           myCitizenId={myCitizenId}
           revealFooter={revealFooter}
-          collapsed={collapseSpotlight}
+          collapsed={collapseWelcomeBar}
         />
         <div
-          className={`collapse-slot ${collapseSpotlight ? 'collapse-slot--closed' : 'collapse-slot--open'}`}
+          className={`collapse-slot ${collapsePanels ? 'collapse-slot--closed' : 'collapse-slot--open'}`}
         >
           <div>
             <PrintAd />

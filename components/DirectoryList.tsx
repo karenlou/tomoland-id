@@ -258,12 +258,33 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [printingCitizen, setPrintingCitizen] = useState<Citizen | null>(null)
   const [myCitizenId, setMyCitizenId] = useState<string | null>(null)
   const [justGrew, setJustGrew] = useState(false)
-  /** Sticky-spotlight (mobile only) — welcome bar + print ad collapse
-   * together on scroll-down (or any gesture, from anywhere, that isn't
-   * clearly an upward list scroll) and expand together on scroll-up,
-   * tracking whichever direction was scrolled *last* rather than position —
-   * being at the very top just means there's nowhere further up to go. */
-  const [spotlightCollapsed, setSpotlightCollapsed] = useState(false)
+  /** Sticky-spotlight (mobile only), driven entirely by the list's own
+   * onScroll below — deliberately the *only* listener involved. An earlier
+   * version also listened for touchmove/wheel on `window` so a swipe
+   * anywhere (not just on the list) could trigger it, but touch/wheel
+   * events bubble to window regardless of where they started — so that
+   * listener ALSO fired for gestures that started on the list itself,
+   * fighting the list's own directional onScroll handler for the same
+   * gesture and producing exactly the random snapping this was supposed to
+   * avoid. One source of truth, tied to the list's real scroll position:
+   * - 'expanded': welcome bar + print ad both shown — at the top.
+   * - 'collapsed': both hidden — scrolling down.
+   * - 'partial': welcome bar shown, print ad still hidden — scrolling back
+   *   up, but not yet all the way to the top.
+   */
+  const [spotlightStage, setSpotlightStage] = useState<'expanded' | 'partial' | 'collapsed'>(
+    'expanded',
+  )
+  /** Set on the user's first deliberate interaction (selecting a citizen,
+   * scrolling the list, or any gesture). Guards the device-ownership restore
+   * below — that lookup is an async network request and can resolve well
+   * after the user has already started browsing/scrolling, and forcing the
+   * view back to "your own ID" at that point both yanks away whatever they
+   * were looking at and (via isOwnSelected) snaps the collapsed spotlight
+   * back open out of nowhere. Once the user has done anything, the
+   * restoration is skipped — myCitizenId itself still gets set either way,
+   * just not the forced hoveredId jump. */
+  const userInteractedRef = useRef(false)
   const pointerRef = useRef({ x: 0, y: 0 })
   const suppressMouseSyncRef = useRef(false)
   const suppressMouseSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -274,8 +295,27 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const rightColRef = useRef<HTMLDivElement>(null)
   const rightContentRef = useRef<HTMLDivElement>(null)
   const rowsScrollRef = useRef<HTMLDivElement>(null)
-  const lastScrollTopRef = useRef(0)
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Touch/wheel gestures starting anywhere in .directory-columns *except*
+   * the list's own scroll element (which already handles itself natively)
+   * — forwarded directly onto the list's real scrollTop. When everything's
+   * expanded the spotlight fills most of the screen, leaving only a thin
+   * list strip to actually grab; this makes the whole combined area act as
+   * the scroll surface instead. Setting the list's *real* scrollTop fires
+   * its own native scroll event — the onScroll handler below (the single
+   * source of truth for the collapse stage) reacts to that exactly as it
+   * would to a touch that landed on the list directly, so there's no
+   * separate state to keep in sync and nothing to race against. */
+  const touchForwardYRef = useRef(0)
+  const touchForwardScrollTopRef = useRef(0)
+  /** scrollTop at the point spotlightStage last changed — direction is
+   * judged against this anchor rather than the immediately preceding
+   * scroll event, so it takes a deliberate ~24px move to flip state. A
+   * 1px-vs-previous comparison reacts to every bit of scroll jitter
+   * (momentum deceleration, iOS rubber-band bounce at the end of a drag),
+   * which was flipping the spotlight open mid-scroll and shrinking the list
+   * out from under the user's thumb — "expanded" eats real vertical space
+   * up here, it isn't free. */
+  const scrollDirectionAnchorRef = useRef(0)
   const [rightScale, setRightScale] = useState(1)
   const isMobile = useIsMobile()
 
@@ -290,48 +330,6 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   useEffect(() => {
     panelModeRef.current = panelMode
   }, [panelMode])
-
-  // Sticky-spotlight trigger — any scroll/swipe gesture anywhere on the
-  // mobile screen activates it immediately, not just one that lands on the
-  // list itself (the spotlight area above has nothing to scroll, so a swipe
-  // there would otherwise produce no scroll event at all and never trigger
-  // it). touchmove/wheel fire regardless of which element the gesture
-  // started on, and can't carry direction (a gesture over the spotlight has
-  // nothing to actually scroll), so this always collapses — only the list's
-  // own onScroll below (which does have real direction to work with) can
-  // expand it back.
-  //
-  // This can't be the only thing setting it, though: touchmove fires on
-  // every raw touch sample, faster than the resulting scroll events the
-  // browser actually dispatches, so the *last* touchmove of an upward swipe
-  // can easily fire with no later scroll event to correct it — leaving it
-  // stuck collapsed even though the list is genuinely scrolling up. So each
-  // gesture event also (re)starts a short settle timer that, once movement
-  // actually stops, reconciles against the list's real scrollTop — if
-  // that's at the top, there's nowhere left to scroll up from, so it
-  // expands.
-  useEffect(() => {
-    if (!isMobile) return
-
-    const reconcile = () => {
-      const top = rowsScrollRef.current?.scrollTop ?? 0
-      if (top <= 4) setSpotlightCollapsed(false)
-    }
-
-    const onGestureScroll = () => {
-      setSpotlightCollapsed(true)
-      if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current)
-      settleTimerRef.current = setTimeout(reconcile, 150)
-    }
-
-    window.addEventListener('touchmove', onGestureScroll, { passive: true })
-    window.addEventListener('wheel', onGestureScroll, { passive: true })
-    return () => {
-      window.removeEventListener('touchmove', onGestureScroll)
-      window.removeEventListener('wheel', onGestureScroll)
-      if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current)
-    }
-  }, [isMobile])
 
   // Scale the spotlight+ad block to fill the same height as the directory
   // list beside it, rather than leaving empty space below a small, top-aligned
@@ -378,7 +376,9 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
       if (owned) {
         setMyCitizenId(owned.id)
-        setHoveredId(owned.id)
+        if (!userInteractedRef.current) {
+          setHoveredId(owned.id)
+        }
         setCitizens((prev) =>
           prev.some((c) => c.id === owned.id) ? prev : [...prev, owned],
         )
@@ -394,6 +394,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   }, [initialCitizens])
 
   const selectCitizen = useCallback((id: string, playSound = true) => {
+    userInteractedRef.current = true
     setHoveredId((prev) => {
       if (prev !== id && playSound) playClickSound()
       return id
@@ -466,9 +467,15 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const isOwnSelected = Boolean(
     hoveredCitizen && myCitizenId && hoveredCitizen.id === myCitizenId,
   )
-  /** Own ID always forces expanded regardless of scroll — the manage
+  /** Own ID always forces 'expanded' regardless of scroll — the manage
    * buttons live in the welcome bar and need to stay reachable. */
-  const collapseSpotlight = isMobile && spotlightCollapsed && !isOwnSelected
+  const effectiveSpotlightStage = isOwnSelected ? 'expanded' : spotlightStage
+  /** Print ad — hidden in both 'collapsed' and 'partial', only shown once
+   * fully back at the top. */
+  const collapsePrintAd = isMobile && effectiveSpotlightStage !== 'expanded'
+  /** Welcome bar — hidden only while fully 'collapsed'; scrolling up softens
+   * straight back to showing it ('partial'), even before reaching the top. */
+  const collapseWelcomeBar = isMobile && effectiveSpotlightStage === 'collapsed'
 
   useEffect(() => {
     filteredRef.current = filtered
@@ -644,6 +651,25 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         width: '100%',
         overflow: 'hidden',
       }}
+      onTouchStart={(e) => {
+        if (!isMobile || isCreating) return
+        if (rowsScrollRef.current?.contains(e.target as Node)) return
+        userInteractedRef.current = true
+        touchForwardYRef.current = e.touches[0].clientY
+        touchForwardScrollTopRef.current = rowsScrollRef.current?.scrollTop ?? 0
+      }}
+      onTouchMove={(e) => {
+        if (!isMobile || isCreating || !rowsScrollRef.current) return
+        if (rowsScrollRef.current.contains(e.target as Node)) return
+        const deltaY = touchForwardYRef.current - e.touches[0].clientY
+        rowsScrollRef.current.scrollTop = touchForwardScrollTopRef.current + deltaY
+      }}
+      onWheel={(e) => {
+        if (!isMobile || isCreating || !rowsScrollRef.current) return
+        if (rowsScrollRef.current.contains(e.target as Node)) return
+        userInteractedRef.current = true
+        rowsScrollRef.current.scrollTop += e.deltaY
+      }}
     >
       <div
         className={`directory-list-col${isCreating ? ' directory-list-col--creating' : ''}`}
@@ -708,17 +734,23 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           }}
           onScroll={(e) => {
             if (!isMobile) return
+            userInteractedRef.current = true
             const top = e.currentTarget.scrollTop
-            const last = lastScrollTopRef.current
 
             if (top <= 4) {
-              setSpotlightCollapsed(false)
-            } else if (top > last + 1) {
-              setSpotlightCollapsed(true)
-            } else if (top < last - 1) {
-              setSpotlightCollapsed(false)
+              setSpotlightStage('expanded')
+              scrollDirectionAnchorRef.current = top
+              return
             }
-            lastScrollTopRef.current = top
+
+            const delta = top - scrollDirectionAnchorRef.current
+            if (delta > 24) {
+              setSpotlightStage('collapsed')
+              scrollDirectionAnchorRef.current = top
+            } else if (delta < -24) {
+              setSpotlightStage('partial')
+              scrollDirectionAnchorRef.current = top
+            }
           }}
         >
         {isMobile ? (
@@ -769,7 +801,8 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           citizen={hoveredCitizen}
           printingCitizen={printingCitizen}
           myCitizenId={myCitizenId}
-          collapseSpotlight={collapseSpotlight}
+          collapsePanels={collapsePrintAd}
+          collapseWelcomeBar={collapseWelcomeBar}
           onGetId={() => setPanelMode('create')}
           onViewMyId={handleViewMyId}
           onReissue={handleReissue}

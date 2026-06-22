@@ -147,8 +147,13 @@ export default function CameraCapture({
    * minus the row gap (14px) minus the shutter control column's hard floor
    * (the 84px shutter wrapper doesn't shrink) leaves ~97px — pick comfortably
    * under that so nothing in the control column clips. */
-  const lcdW = isMobile ? 90 : compact ? 180 : 240
-  const lcdH = isMobile ? 105 : compact ? 210 : 280
+  /** The viewfinder takes priority over the controls column on mobile — the
+   * controls column shrinks to exactly the shutter circle's own width (the
+   * one thing in it that can't shrink further) so the lens housing can
+   * claim the rest, even though that leaves the upload/retry button
+   * narrower than its label would prefer. */
+  const lcdW = isMobile ? 116 : compact ? 180 : 240
+  const lcdH = isMobile ? 135 : compact ? 210 : 280
   const bodyMaxW = isMobile ? 260 : CAMERA_BODY_W
 
   const stopCamera = useCallback(() => {
@@ -496,7 +501,7 @@ export default function CameraCapture({
         <div
           style={{
             display: 'flex',
-            gap: 14,
+            gap: isMobile ? 8 : 14,
             alignItems: 'stretch',
             justifyContent: 'space-between',
             paddingRight: 14,
@@ -552,9 +557,10 @@ export default function CameraCapture({
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
-              flex: 1,
+              flex: isMobile ? '0 0 84px' : 1,
+              width: isMobile ? 84 : undefined,
               minWidth: 0,
-              paddingRight: 2,
+              paddingRight: isMobile ? 0 : 2,
               minHeight: lcdH,
             }}
           >
