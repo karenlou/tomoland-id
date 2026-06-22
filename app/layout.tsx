@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body style={{ height: '100vh', overflow: 'hidden' }}>
+      <body>
         <div className="paper-texture-overlay" aria-hidden />
         <ClickSoundProvider>{children}</ClickSoundProvider>
       </body>

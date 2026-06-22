@@ -4,16 +4,17 @@ import { useEffect, useRef, useState } from 'react'
 import CitizenCard from './CitizenCard'
 import FlippableId from './FlippableId'
 import { IdSleeveShell, getSleeveMetrics } from './IdSleeve'
-import { CARD_H, CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
+import { CARD_H, CARD_W, cardRadiusAtScale, MOBILE_CREATE_SPOTLIGHT_W } from '@/lib/cardConstants'
 import { playPrinterSound, stopPrinterSound } from '@/lib/clickSound'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { xShareIntentUrl } from '@/lib/xShareTemplate'
 import type { Citizen } from '@/types'
 
-const PRINT_W = 340
-const SPOTLIGHT_W = 400
-const SCALE = SPOTLIGHT_W / CARD_W
-const SPOTLIGHT_H = Math.round(CARD_H * SCALE)
-const PRINT_VISUAL_SCALE = PRINT_W / SPOTLIGHT_W
+const DESKTOP_SPOTLIGHT_W = 400
+/** The printer body is art-directed slightly narrower than the spotlight
+ * card it prints — keep that same ratio rather than a fixed px width, so it
+ * stays proportional at the smaller mobile spotlight width too. */
+const PRINT_VISUAL_SCALE = 340 / DESKTOP_SPOTLIGHT_W
 /** Keep in sync with .retro-print-emerge's animation-duration in globals.css */
 const PRINT_DURATION_MS = 4800
 const PRINT_HOLD_MS = 500
@@ -39,6 +40,12 @@ interface RetroPrinterProps {
 }
 
 export default function RetroPrinter({ citizen, onComplete }: RetroPrinterProps) {
+  const isMobile = useIsMobile()
+  const SPOTLIGHT_W = isMobile ? MOBILE_CREATE_SPOTLIGHT_W : DESKTOP_SPOTLIGHT_W
+  const SCALE = SPOTLIGHT_W / CARD_W
+  const SPOTLIGHT_H = Math.round(CARD_H * SCALE)
+  const PRINT_W = Math.round(SPOTLIGHT_W * PRINT_VISUAL_SCALE)
+
   const [phase, setPhase] = useState<Phase>('printing')
   const [settlePhase, setSettlePhase] = useState<SettlePhase | null>(null)
   const [flipped, setFlipped] = useState(false)

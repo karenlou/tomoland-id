@@ -29,6 +29,12 @@ interface RoleSlotMachineProps {
   onSpinChange?: (spinning: boolean) => void
   /** Swap the small lever for a big, obvious tap target (e.g. for a touch kiosk) */
   bigButton?: boolean
+  /** Mobile create-flow variant of bigButton — smaller reel text (kiosk's 20px
+   * is sized for viewing from a few feet away, too large for a phone) and an
+   * unlabeled button styled like the lever's own red shutter-sphere handle,
+   * rather than the kiosk's bordered text button. Has no effect unless
+   * bigButton is also set, and never applies to the kiosk itself. */
+  compactButton?: boolean
   /** Override reel spin duration (ms) */
   spinMs?: number
 }
@@ -43,6 +49,7 @@ export default function RoleSlotMachine({
   onResolved,
   onSpinChange,
   bigButton = false,
+  compactButton = false,
   spinMs,
 }: RoleSlotMachineProps) {
   const [target, setTarget] = useState<Role>(() => randomRole())
@@ -59,7 +66,7 @@ export default function RoleSlotMachine({
   const triggeredRef = useRef(false)
 
   const rowH = bigButton ? KIOSK_ITEM_H : ITEM_H
-  const reelFontSize = bigButton ? 20 : 12
+  const reelFontSize = bigButton ? (compactButton ? 13 : 20) : 12
   const spinDuration = spinMs ?? (bigButton ? KIOSK_SPIN_MS : SPIN_MS)
 
   useEffect(() => {
@@ -308,16 +315,31 @@ export default function RoleSlotMachine({
           </div>
 
           {bigButton ? (
-            <button
-              type="button"
-              onClick={pull}
-              disabled={phase === 'spinning'}
-              aria-label="Randomize role"
-              className={phase === 'spinning' ? 'slot-button-pressed' : undefined}
-              style={bigButtonStyle(phase === 'spinning', hasRolled)}
-            >
-              {phase === 'spinning' ? 'Spinning…' : phase === 'done' ? 'Reroll' : 'Randomize'}
-            </button>
+            compactButton ? (
+              <button
+                type="button"
+                onClick={pull}
+                disabled={phase === 'spinning'}
+                aria-label={phase === 'done' ? 'Reroll role' : 'Randomize role'}
+                className={phase === 'spinning' ? 'slot-button-pressed' : undefined}
+                style={compactBigButtonBezelStyle}
+              >
+                <span style={compactBigButtonFaceStyle(phase === 'spinning')}>
+                  {phase !== 'spinning' && <span aria-hidden style={compactBigButtonHighlightStyle} />}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={pull}
+                disabled={phase === 'spinning'}
+                aria-label="Randomize role"
+                className={phase === 'spinning' ? 'slot-button-pressed' : undefined}
+                style={bigButtonStyle(phase === 'spinning', hasRolled)}
+              >
+                {phase === 'spinning' ? 'Spinning…' : phase === 'done' ? 'Reroll' : 'Randomize'}
+              </button>
+            )
           ) : (
             /* Lever — rail stays put, knob slides down it and springs back */
             <div
@@ -477,6 +499,56 @@ function bigButtonStyle(disabled: boolean, outline: boolean): React.CSSPropertie
     background: disabled ? 'var(--color-ink-muted)' : 'var(--color-ink)',
     color: 'var(--color-tomo-yellow)',
   }
+}
+
+/** Same glossy red gradient/border/sheen as RedShutterSphere (the lever's own
+ * handle), applied to the existing rectangular bigButton shape instead of a
+ * bordered text button — no label, the color alone reads as "press me". */
+/** Outer bezel — matches CameraCapture's shutter button ring (same gray
+ * gradient/border/sheen), just rectangular instead of circular. */
+const compactBigButtonBezelStyle: React.CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  display: 'flex',
+  padding: 6,
+  borderRadius: 10,
+  border: '3px solid var(--color-border)',
+  background: 'linear-gradient(180deg, #e8e8e8 0%, #a0a0a0 100%)',
+  boxShadow: 'inset 0 2px 0 #fff, 0 2px 0 rgba(44,37,17,0.2)',
+}
+
+/** Inner face — RedShutterSphere's own gradient/border/sheen (the lever
+ * handle housed inside that same bezel). No label — the color, sheen, and
+ * bezel together read as "press me" on their own. */
+function compactBigButtonFaceStyle(disabled: boolean): React.CSSProperties {
+  return {
+    position: 'relative',
+    flex: 1,
+    minHeight: 44,
+    overflow: 'hidden',
+    borderRadius: 6,
+    border: disabled ? '2.5px solid #2C2511' : '2.5px solid #141008',
+    background: disabled
+      ? 'linear-gradient(180deg, #999 0%, #666 100%)'
+      : 'linear-gradient(180deg, #ff1212 0%, #e80000 45%, #b50000 100%)',
+    boxShadow: disabled
+      ? 'inset 0 1px 0 rgba(255,255,255,0.15)'
+      : 'inset 0 -6px 10px rgba(70,0,0,0.55), inset 0 2px 0 rgba(255,90,90,0.75)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  }
+}
+
+/** Glossy white sheen — same highlight treatment as RedShutterSphere's,
+ * reshaped from its ellipse to suit a wide rectangular face instead. */
+const compactBigButtonHighlightStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 3,
+  left: 3,
+  right: 3,
+  height: '42%',
+  borderRadius: 4,
+  background: 'linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,176,176,0.28) 65%, transparent 100%)',
+  pointerEvents: 'none',
 }
 
 function MarqueeBulbs({

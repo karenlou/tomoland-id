@@ -24,6 +24,16 @@ export const SPOTLIGHT_SCALE = SPOTLIGHT_W / CARD_W
 export const SLEEVE_PAD_X = 26
 export const SPOTLIGHT_SLEEVE_W = SPOTLIGHT_W + SLEEVE_PAD_X * 2
 
+/** Smaller card width used below the mobile breakpoint — the surrounding
+ * spotlight panel/print ad stretch to match the directory list's width
+ * instead, but the card itself stays at this smaller, comfortable size. */
+export const MOBILE_SPOTLIGHT_W = 220
+
+/** The create/print flow isn't sharing the screen with the spotlight card —
+ * it's the only thing on screen, so it can afford to be wider than
+ * MOBILE_SPOTLIGHT_W. CameraCapture/RoleSlotMachine need the extra room. */
+export const MOBILE_CREATE_SPOTLIGHT_W = 260
+
 /** Party kiosk print-ready export size (1350x850 per brief — slightly wider
  * aspect ratio than the card's native 683x433, so scaling to fill the width
  * leaves a few px of vertical overflow that gets clipped, same as elsewhere. */

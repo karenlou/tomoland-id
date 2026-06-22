@@ -5,13 +5,19 @@ import { playClickSound } from '@/lib/clickSound'
 import CameraCapture from './CameraCapture'
 import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
-import { CARD_DEPTH_SHADOW, CARD_H, CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
+import {
+  CARD_DEPTH_SHADOW,
+  CARD_H,
+  CARD_W,
+  cardRadiusAtScale,
+  MOBILE_CREATE_SPOTLIGHT_W,
+} from '@/lib/cardConstants'
 import { getOrCreateDeviceToken, getStoredMyCitizenId } from '@/lib/deviceAuth'
+import { useIsMobile } from '@/lib/useIsMobile'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
 
-const SPOTLIGHT_W = 400
-const SCALE = SPOTLIGHT_W / CARD_W
+const DESKTOP_SPOTLIGHT_W = 400
 
 type CreateStep = 'name' | 'role' | 'photo' | 'submit'
 
@@ -50,8 +56,16 @@ interface CreatePanelProps {
 const PREVIEW_CONTENT_GAP = 10
 const PROGRESS_FOOTER_H = 28
 const STEP_ZONE_H = 300
+/** Taller than desktop's STEP_ZONE_H — the mobile role step swaps the small
+ * drag-lever for RoleSlotMachine's bigButton layout, which stacks the reel
+ * and button instead of placing them side by side, needing more height. */
+const MOBILE_STEP_ZONE_H = 360
 
 export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
+  const isMobile = useIsMobile()
+  const spotlightW = isMobile ? MOBILE_CREATE_SPOTLIGHT_W : DESKTOP_SPOTLIGHT_W
+  const scale = spotlightW / CARD_W
+  const stepZoneH = isMobile ? MOBILE_STEP_ZONE_H : STEP_ZONE_H
   const [step, setStep] = useState<CreateStep>('name')
   const [prevStep, setPrevStep] = useState<CreateStep | null>(null)
   const [stepDirection, setStepDirection] = useState<'forward' | 'back'>('forward')
@@ -74,8 +88,8 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
     setPhotoPreviewUrl(null)
   }, [])
 
-  const cardH = Math.round(CARD_H * SCALE)
-  const cardRadius = cardRadiusAtScale(SCALE)
+  const cardH = Math.round(CARD_H * scale)
+  const cardRadius = cardRadiusAtScale(scale)
 
   const previewCitizen = {
     name: name || undefined,
@@ -180,14 +194,14 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
     step === 'submit' || (step === 'name' && !previewCollapsed)
 
   const shellHeight =
-    cardH + PREVIEW_CONTENT_GAP + STEP_ZONE_H + PROGRESS_FOOTER_H
+    cardH + PREVIEW_CONTENT_GAP + stepZoneH + PROGRESS_FOOTER_H
 
   const previewCard = (
     <div style={{ display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
       <div
         className="id-surface"
         style={{
-          width: SPOTLIGHT_W,
+          width: spotlightW,
           height: cardH,
           borderRadius: cardRadius,
           boxShadow: CARD_DEPTH_SHADOW,
@@ -195,7 +209,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
       >
         <div
           style={{
-            width: SPOTLIGHT_W,
+            width: spotlightW,
             height: cardH,
             overflow: 'hidden',
             borderRadius: cardRadius,
@@ -203,7 +217,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
         >
           <div
             style={{
-              transform: `scale(${SCALE})`,
+              transform: `scale(${scale})`,
               transformOrigin: 'top left',
               width: CARD_W,
               height: CARD_H,
@@ -229,7 +243,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
       <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
         <div
           style={{
-            width: SPOTLIGHT_W,
+            width: spotlightW,
             position: 'relative',
             height: shellHeight,
             flexShrink: 0,
@@ -295,7 +309,12 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
             {step === 'role' && (
               <>
                 <p style={promptStyle}>What&apos;s your relationship to Tomo?</p>
-                <RoleSlotMachine onResolved={setRelationToTomo} onSpinChange={setRoleSpinning} />
+                <RoleSlotMachine
+                  onResolved={setRelationToTomo}
+                  onSpinChange={setRoleSpinning}
+                  bigButton={isMobile}
+                  compactButton={isMobile}
+                />
               </>
             )}
 
@@ -307,7 +326,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
                   onClear={handleClear}
                   capturedUrl={photoPreviewUrl}
                   compact
-                  autoStart
+                  autoStart={!isMobile}
                 />
               </>
             )}

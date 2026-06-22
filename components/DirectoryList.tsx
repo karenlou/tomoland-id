@@ -15,6 +15,7 @@ import RetroScrollArea from './RetroScrollArea'
 import { SPOTLIGHT_SLEEVE_W } from '@/lib/cardConstants'
 import { CitizenCardThumbnail } from './CitizenCard'
 import { playClickSound } from '@/lib/clickSound'
+import { useIsMobile } from '@/lib/useIsMobile'
 import type { Citizen } from '@/types'
 
 interface DirectoryListProps {
@@ -74,13 +75,17 @@ function DirectoryRow({
   isHovered,
   isNew,
   collapsed,
+  isMobile,
   onHover,
+  onSelect,
 }: {
   citizen: Citizen
   isHovered: boolean
   isNew: boolean
   collapsed: boolean
+  isMobile: boolean
   onHover: () => void
+  onSelect: () => void
 }) {
   if (collapsed) {
     return (
@@ -88,6 +93,7 @@ function DirectoryRow({
         data-directory-row
         data-citizen-id={citizen.id}
         onMouseEnter={onHover}
+        onClick={onSelect}
         className={isNew ? 'directory-row-grow-in' : undefined}
         style={{
           display: 'flex',
@@ -118,6 +124,7 @@ function DirectoryRow({
       data-directory-row
       data-citizen-id={citizen.id}
       onMouseEnter={onHover}
+      onClick={onSelect}
       className={isNew ? 'directory-row-grow-in' : undefined}
       style={{
         display: 'flex',
@@ -208,7 +215,7 @@ function DirectoryRow({
           padding: 8,
         }}
       >
-        <CitizenCardThumbnail citizen={citizen} />
+        <CitizenCardThumbnail citizen={citizen} width={isMobile ? 64 : undefined} />
       </div>
     </div>
   )
@@ -251,6 +258,12 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [printingCitizen, setPrintingCitizen] = useState<Citizen | null>(null)
   const [myCitizenId, setMyCitizenId] = useState<string | null>(null)
   const [justGrew, setJustGrew] = useState(false)
+  /** Sticky-spotlight (mobile only) — welcome bar + print ad collapse
+   * together on scroll-down (or any gesture, from anywhere, that isn't
+   * clearly an upward list scroll) and expand together on scroll-up,
+   * tracking whichever direction was scrolled *last* rather than position —
+   * being at the very top just means there's nowhere further up to go. */
+  const [spotlightCollapsed, setSpotlightCollapsed] = useState(false)
   const pointerRef = useRef({ x: 0, y: 0 })
   const suppressMouseSyncRef = useRef(false)
   const suppressMouseSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -260,7 +273,11 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const panelModeRef = useRef<RightPanelMode>('view')
   const rightColRef = useRef<HTMLDivElement>(null)
   const rightContentRef = useRef<HTMLDivElement>(null)
+  const rowsScrollRef = useRef<HTMLDivElement>(null)
+  const lastScrollTopRef = useRef(0)
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [rightScale, setRightScale] = useState(1)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     myCitizenIdRef.current = myCitizenId
@@ -274,6 +291,48 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     panelModeRef.current = panelMode
   }, [panelMode])
 
+  // Sticky-spotlight trigger — any scroll/swipe gesture anywhere on the
+  // mobile screen activates it immediately, not just one that lands on the
+  // list itself (the spotlight area above has nothing to scroll, so a swipe
+  // there would otherwise produce no scroll event at all and never trigger
+  // it). touchmove/wheel fire regardless of which element the gesture
+  // started on, and can't carry direction (a gesture over the spotlight has
+  // nothing to actually scroll), so this always collapses — only the list's
+  // own onScroll below (which does have real direction to work with) can
+  // expand it back.
+  //
+  // This can't be the only thing setting it, though: touchmove fires on
+  // every raw touch sample, faster than the resulting scroll events the
+  // browser actually dispatches, so the *last* touchmove of an upward swipe
+  // can easily fire with no later scroll event to correct it — leaving it
+  // stuck collapsed even though the list is genuinely scrolling up. So each
+  // gesture event also (re)starts a short settle timer that, once movement
+  // actually stops, reconciles against the list's real scrollTop — if
+  // that's at the top, there's nowhere left to scroll up from, so it
+  // expands.
+  useEffect(() => {
+    if (!isMobile) return
+
+    const reconcile = () => {
+      const top = rowsScrollRef.current?.scrollTop ?? 0
+      if (top <= 4) setSpotlightCollapsed(false)
+    }
+
+    const onGestureScroll = () => {
+      setSpotlightCollapsed(true)
+      if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = setTimeout(reconcile, 150)
+    }
+
+    window.addEventListener('touchmove', onGestureScroll, { passive: true })
+    window.addEventListener('wheel', onGestureScroll, { passive: true })
+    return () => {
+      window.removeEventListener('touchmove', onGestureScroll)
+      window.removeEventListener('wheel', onGestureScroll)
+      if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current)
+    }
+  }, [isMobile])
+
   // Scale the spotlight+ad block to fill the same height as the directory
   // list beside it, rather than leaving empty space below a small, top-aligned
   // block. Measured via offset geometry (layout size, ignoring the very
@@ -285,7 +344,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   // edge even at native size (it overflows its own box by design), so a
   // slight shrink-below-1 is sometimes required to keep it fully visible.
   useEffect(() => {
-    if (panelMode !== 'view') return
+    if (panelMode !== 'view' || isMobile) return
     const col = rightColRef.current
     const content = rightContentRef.current
     if (!col || !content) return
@@ -308,7 +367,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     observer.observe(col)
     observer.observe(content)
     return () => observer.disconnect()
-  }, [panelMode])
+  }, [panelMode, isMobile])
 
   useEffect(() => {
     let cancelled = false
@@ -403,6 +462,13 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
   const hoveredCitizen =
     filtered.find((c) => c.id === hoveredId) ?? filtered[0] ?? null
+
+  const isOwnSelected = Boolean(
+    hoveredCitizen && myCitizenId && hoveredCitizen.id === myCitizenId,
+  )
+  /** Own ID always forces expanded regardless of scroll — the manage
+   * buttons live in the welcome bar and need to stay reachable. */
+  const collapseSpotlight = isMobile && spotlightCollapsed && !isOwnSelected
 
   useEffect(() => {
     filteredRef.current = filtered
@@ -532,8 +598,42 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const isCreating = panelMode !== 'view'
   const flexEase = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
+  const rowsContent =
+    filtered.length === 0 ? (
+      isCreating ? null : (
+        <p
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 'var(--text-body)',
+            color: 'var(--color-ink-muted)',
+            padding: '40px 0',
+            textAlign: 'center',
+          }}
+        >
+          {query ? 'No citizens match your search.' : 'No citizens yet. Be the first!'}
+        </p>
+      )
+    ) : (
+      filtered.map((c) => (
+        <DirectoryRow
+          key={c.id}
+          citizen={c}
+          isHovered={hoveredId === c.id}
+          isNew={c.id === myCitizenId}
+          collapsed={isCreating}
+          isMobile={isMobile}
+          onHover={() => {
+            if (suppressMouseSyncRef.current) return
+            selectCitizen(c.id)
+          }}
+          onSelect={() => selectCitizen(c.id)}
+        />
+      ))
+    )
+
   return (
     <div
+      className="directory-columns"
       style={{
         flex: 1,
         display: 'flex',
@@ -546,6 +646,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       }}
     >
       <div
+        className={`directory-list-col${isCreating ? ' directory-list-col--creating' : ''}`}
         style={{
           /* 88px thumbnail + 12px padding + 2px border + RetroScrollArea's 24px
              scrollbar gutter (reserved whenever the list overflows) + a little air */
@@ -566,11 +667,12 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
             <div
               style={{
                 display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: isMobile ? 'stretch' : 'center',
                 marginBottom: 8,
                 flexShrink: 0,
-                gap: 16,
+                gap: isMobile ? 8 : 16,
               }}
             >
               <p
@@ -588,7 +690,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
               >
                 {filtered.length} TOMOSAPIENS AND COUNTING
               </p>
-              <div style={{ flex: '1 1 auto', maxWidth: 220, minWidth: 0 }}>
+              <div style={{ flex: '1 1 auto', maxWidth: isMobile ? '100%' : 220, minWidth: 0 }}>
                 <SearchBar value={query} onChange={setQuery} />
               </div>
             </div>
@@ -598,42 +700,36 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         )}
 
         <div
+          ref={rowsScrollRef}
+          className="directory-rows-scroll"
           style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
           onMouseMove={(e) => {
             pointerRef.current = { x: e.clientX, y: e.clientY }
           }}
+          onScroll={(e) => {
+            if (!isMobile) return
+            const top = e.currentTarget.scrollTop
+            const last = lastScrollTopRef.current
+
+            if (top <= 4) {
+              setSpotlightCollapsed(false)
+            } else if (top > last + 1) {
+              setSpotlightCollapsed(true)
+            } else if (top < last - 1) {
+              setSpotlightCollapsed(false)
+            }
+            lastScrollTopRef.current = top
+          }}
         >
-        <RetroScrollArea onScroll={syncSelectionToPointer}>
-          {filtered.length === 0 ? (
-            isCreating ? null : (
-              <p
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 'var(--text-body)',
-                  color: 'var(--color-ink-muted)',
-                  padding: '40px 0',
-                  textAlign: 'center',
-                }}
-              >
-                {query ? 'No citizens match your search.' : 'No citizens yet. Be the first!'}
-              </p>
-            )
-          ) : (
-            filtered.map((c) => (
-              <DirectoryRow
-                key={c.id}
-                citizen={c}
-                isHovered={hoveredId === c.id}
-                isNew={c.id === myCitizenId}
-                collapsed={isCreating}
-                onHover={() => {
-                  if (suppressMouseSyncRef.current) return
-                  selectCitizen(c.id)
-                }}
-              />
-            ))
-          )}
-        </RetroScrollArea>
+        {isMobile ? (
+          /* RetroScrollArea is mouse-only (wheel + draggable thumb, no touch
+           * handling) — on mobile this div is the scroll region instead
+           * (native overflow, via .directory-rows-scroll), so the rows just
+           * render inline into it. */
+          <div style={{ display: 'flex', flexDirection: 'column' }}>{rowsContent}</div>
+        ) : (
+          <RetroScrollArea onScroll={syncSelectionToPointer}>{rowsContent}</RetroScrollArea>
+        )}
         </div>
 
         {!isCreating && filtered.length > 0 && (
@@ -643,6 +739,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
       <div
         ref={rightColRef}
+        className={`directory-detail-col${isCreating ? ' directory-detail-col--creating' : ''}`}
         style={{
           flex: 1,
           minWidth: 0,
@@ -660,10 +757,10 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
         <div
           ref={rightContentRef}
           style={{
-            width: SPOTLIGHT_SLEEVE_W,
+            width: isMobile ? '100%' : SPOTLIGHT_SLEEVE_W,
             maxWidth: '100%',
             flexShrink: 0,
-            transform: panelMode === 'view' ? `scale(${rightScale})` : undefined,
+            transform: panelMode === 'view' && !isMobile ? `scale(${rightScale})` : undefined,
             transformOrigin: 'top center',
           }}
         >
@@ -672,6 +769,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           citizen={hoveredCitizen}
           printingCitizen={printingCitizen}
           myCitizenId={myCitizenId}
+          collapseSpotlight={collapseSpotlight}
           onGetId={() => setPanelMode('create')}
           onViewMyId={handleViewMyId}
           onReissue={handleReissue}

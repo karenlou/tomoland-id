@@ -1,4 +1,3 @@
-import { SPOTLIGHT_SLEEVE_W } from '@/lib/cardConstants'
 import { xShareIntentUrl } from '@/lib/xShareTemplate'
 
 /** Long enough to always overflow the narrow list column at this font size,
@@ -16,7 +15,9 @@ const TAG_FULL_H = 207.106
 const TAG_RECT_H = 185.611
 
 /** Percent split so left-box + right-box-*rectangle* (excluding the tail)
- * sum to exactly 100% of the available width — responsive, not fixed px. */
+ * sum to exactly 100% of the available width — responsive, not fixed px.
+ * This is what lets the whole block stretch to fill any container width
+ * (e.g. matching the directory list beside/below it) without distorting it. */
 const LEFT_PCT = (LEFT_BOX_W / (LEFT_BOX_W + RIGHT_RECT_W)) * 100
 /** The actual right-panel content is rendered wider than its flex slot by
  * this ratio, so the tail pokes out past the nominal 100% width boundary
@@ -24,7 +25,9 @@ const LEFT_PCT = (LEFT_BOX_W / (LEFT_BOX_W + RIGHT_RECT_W)) * 100
 const TAIL_WIDTH_RATIO = (TAG_FULL_W / RIGHT_RECT_W) * 100
 
 /** Slightly under the mockup's own native height, to keep the tail compact
- * once the whole block gets scaled up to match the directory's height. */
+ * once the whole block gets scaled up to match the directory's height.
+ * Fixed regardless of width — the padding/sizing here is tuned to the
+ * mockup and shouldn't vary with viewport. */
 const LEFT_PANEL_H = 160
 const RIGHT_PANEL_H = Math.round(LEFT_PANEL_H * (TAG_FULL_H / TAG_RECT_H))
 
@@ -67,7 +70,6 @@ export default function PrintAd() {
         alignItems: 'flex-start',
         gap: 8,
         width: '100%',
-        maxWidth: SPOTLIGHT_SLEEVE_W,
         flexShrink: 0,
       }}
     >
@@ -76,7 +78,11 @@ export default function PrintAd() {
         style={{
           flex: `0 0 ${LEFT_PCT}%`,
           minWidth: 0,
-          height: LEFT_PANEL_H,
+          /* A minimum rather than a fixed height — the header's font shrinks
+           * to fit the available width (below), but the body copy doesn't,
+           * so on a narrow panel it can wrap to extra lines; the box grows
+           * to hug that instead of clipping it. */
+          minHeight: LEFT_PANEL_H,
           boxSizing: 'border-box',
           border: '1.5px solid #000000',
           padding: '9px 10px',
@@ -91,7 +97,10 @@ export default function PrintAd() {
             margin: 0,
             fontFamily: displayFont,
             fontWeight: 700,
-            fontSize: 20,
+            /* Shrinks to fit the panel's width instead of overflowing it —
+             * 20px is the original/desktop size (panel comfortably exceeds
+             * that width there), down to a 11px floor so it stays legible. */
+            fontSize: 'clamp(11px, 4.5vw, 20px)',
             color: '#000000',
             textAlign: 'center',
             lineHeight: 1.15,

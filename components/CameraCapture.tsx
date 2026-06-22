@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { playShutterSound } from '@/lib/clickSound'
+import { useIsMobile } from '@/lib/useIsMobile'
 import RedShutterSphere from './RedShutterSphere'
 
 const CAPTURE_W = 480
@@ -140,9 +141,15 @@ export default function CameraCapture({
   const [flash, setFlash] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
 
-  const lcdW = compact ? 180 : 240
-  const lcdH = compact ? 210 : 280
-  const bodyMaxW = CAMERA_BODY_W
+  const isMobile = useIsMobile()
+  /** Tight budget: body (260, matching CreatePanel's mobile shell) minus its
+   * own padding/insets (36px) minus the lens housing's padding/border (~13px)
+   * minus the row gap (14px) minus the shutter control column's hard floor
+   * (the 84px shutter wrapper doesn't shrink) leaves ~97px — pick comfortably
+   * under that so nothing in the control column clips. */
+  const lcdW = isMobile ? 90 : compact ? 180 : 240
+  const lcdH = isMobile ? 105 : compact ? 210 : 280
+  const bodyMaxW = isMobile ? 260 : CAMERA_BODY_W
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -363,17 +370,38 @@ export default function CameraCapture({
       )
     }
 
+    if (autoStart) {
+      return (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <span style={lcdTextStyle}>STANDBY</span>
+        </div>
+      )
+    }
+
     return (
       <div
         style={{
           width: '100%',
           height: '100%',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: 6,
+          padding: 8,
+          textAlign: 'center',
         }}
       >
-        <span style={lcdTextStyle}>STANDBY</span>
+        <span style={lcdTextStyle}>TAP SHUTTER</span>
+        <span style={{ ...lcdTextStyle, fontSize: 8 }}>TO START CAMERA</span>
       </div>
     )
   }

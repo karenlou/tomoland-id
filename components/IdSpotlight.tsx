@@ -9,15 +9,16 @@ import {
   CARD_H,
   CARD_W,
   cardRadiusAtScale,
+  MOBILE_SPOTLIGHT_W,
   SPOTLIGHT_SLEEVE_W,
   SPOTLIGHT_W,
 } from '@/lib/cardConstants'
+import { useIsMobile } from '@/lib/useIsMobile'
 import type { Citizen } from '@/types'
 
 /** Slightly smaller than the standard spotlight width, so the card has more
  * breathing room inside its new bordered mount */
 const DISPLAY_W = Math.round(SPOTLIGHT_W * 0.9)
-const SCALE = DISPLAY_W / CARD_W
 
 interface IdSpotlightProps {
   citizen: Citizen | null
@@ -27,6 +28,9 @@ interface IdSpotlightProps {
   onDelete?: () => void
   myCitizenId?: string | null
   revealFooter?: boolean
+  /** Mobile sticky effect — collapses the welcome bar (scroll-down), leaving
+   * just the bare card; re-expands on scroll-up. */
+  collapsed?: boolean
 }
 
 const CERT_TEXT =
@@ -51,6 +55,8 @@ export function WelcomeBar({
   onDownload?: () => void
   downloading?: boolean
 }) {
+  const isMobile = useIsMobile()
+
   return (
     <div
       style={{
@@ -100,9 +106,10 @@ export function WelcomeBar({
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
           justifyContent: 'space-between',
-          gap: 16,
+          gap: isMobile ? 10 : 16,
           borderTop: '1px solid var(--color-border)',
           padding: '10px 14px',
         }}
@@ -136,6 +143,7 @@ export function WelcomeBar({
               whiteSpace: 'nowrap',
               flexShrink: 0,
               cursor: 'pointer',
+              width: isMobile ? '100%' : undefined,
             }}
           >
             {hasOwnId ? 'View my ID' : 'Get your ID!'}
@@ -184,11 +192,15 @@ export default function IdSpotlight({
   onDelete,
   myCitizenId,
   revealFooter,
+  collapsed = false,
 }: IdSpotlightProps) {
+  const isMobile = useIsMobile()
+  const displayW = isMobile ? MOBILE_SPOTLIGHT_W : DISPLAY_W
+  const scale = displayW / CARD_W
   const hasOwnId = Boolean(myCitizenId)
   const isOwnSelected = Boolean(citizen && myCitizenId && citizen.id === myCitizenId)
-  const cardH = Math.round(CARD_H * SCALE)
-  const cardRadius = cardRadiusAtScale(SCALE)
+  const cardH = Math.round(CARD_H * scale)
+  const cardRadius = cardRadiusAtScale(scale)
   const cardRef = useRef<HTMLDivElement>(null)
   const [downloading, setDownloading] = useState(false)
 
@@ -222,11 +234,11 @@ export default function IdSpotlight({
         flexShrink: 0,
       }}
     >
-      <IdSleeve cardWidth={DISPLAY_W} cardHeight={cardH} cardScale={SCALE}>
+      <IdSleeve cardWidth={displayW} cardHeight={cardH} cardScale={scale}>
         {citizen ? (
           <div
             style={{
-              width: DISPLAY_W,
+              width: displayW,
               height: cardH,
               borderRadius: cardRadius,
               boxShadow: CARD_DEPTH_SHADOW,
@@ -234,7 +246,7 @@ export default function IdSpotlight({
           >
             <div
               style={{
-                width: DISPLAY_W,
+                width: displayW,
                 height: cardH,
                 overflow: 'hidden',
                 borderRadius: cardRadius,
@@ -242,7 +254,7 @@ export default function IdSpotlight({
             >
               <div
                 style={{
-                  transform: `scale(${SCALE})`,
+                  transform: `scale(${scale})`,
                   transformOrigin: 'top left',
                   width: CARD_W,
                   height: CARD_H,
@@ -268,7 +280,7 @@ export default function IdSpotlight({
         ) : (
           <div
             style={{
-              width: DISPLAY_W,
+              width: displayW,
               height: cardH,
               borderRadius: cardRadius,
               background: 'var(--color-tomo-yellow)',
@@ -287,22 +299,26 @@ export default function IdSpotlight({
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
-        maxWidth: SPOTLIGHT_SLEEVE_W,
+        maxWidth: isMobile ? '100%' : SPOTLIGHT_SLEEVE_W,
         boxSizing: 'border-box',
         border: '1.5px solid var(--color-border)',
         flexShrink: 0,
       }}
     >
-      <WelcomeBar
-        hasOwnId={hasOwnId}
-        isOwnSelected={isOwnSelected}
-        onGetId={onGetId}
-        onViewMyId={onViewMyId}
-        onReissue={onReissue}
-        onDelete={onDelete}
-        onDownload={handleDownload}
-        downloading={downloading}
-      />
+      <div className={`collapse-slot ${collapsed ? 'collapse-slot--closed' : 'collapse-slot--open'}`}>
+        <div>
+          <WelcomeBar
+            hasOwnId={hasOwnId}
+            isOwnSelected={isOwnSelected}
+            onGetId={onGetId}
+            onViewMyId={onViewMyId}
+            onReissue={onReissue}
+            onDelete={onDelete}
+            onDownload={handleDownload}
+            downloading={downloading}
+          />
+        </div>
+      </div>
       {cardBlock}
     </div>
   )
