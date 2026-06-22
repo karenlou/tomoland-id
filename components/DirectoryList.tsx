@@ -252,7 +252,8 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [myCitizenId, setMyCitizenId] = useState<string | null>(null)
   const [justGrew, setJustGrew] = useState(false)
   const pointerRef = useRef({ x: 0, y: 0 })
-  const lastInputRef = useRef<'mouse' | 'keyboard'>('mouse')
+  const suppressMouseSyncRef = useRef(false)
+  const suppressMouseSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const myCitizenIdRef = useRef<string | null>(null)
   const hoveredIdRef = useRef<string | null>(null)
   const filteredRef = useRef<Citizen[]>(initialCitizens)
@@ -341,7 +342,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   }, [])
 
   const syncSelectionToPointer = useCallback(() => {
-    if (panelMode !== 'view' || lastInputRef.current !== 'mouse') return
+    if (panelMode !== 'view' || suppressMouseSyncRef.current) return
     const { x, y } = pointerRef.current
     const el = document.elementFromPoint(x, y)
     const row = el?.closest('[data-directory-row]')
@@ -414,10 +415,15 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   // listener each render is too slow to keep up with OS key-repeat, which
   // was letting several keydowns in a row land on the same stale closure and
   // recompute the same "next" row instead of advancing.
-  // Mouse-driven highlighting (syncSelectionToPointer) is suppressed until
-  // the next real mouse move so the scroll this triggers doesn't immediately
-  // reassign the highlight back to whatever row ends up under the now-stale
-  // pointer position.
+  //
+  // The scrollIntoView call below fires a native `scroll` event, which feeds
+  // syncSelectionToPointer (mouse-driven hover-follows-scroll). That must be
+  // suppressed for a beat — but suppressing it only "until the next real
+  // mousemove" doesn't work: a mouse resting on the list still emits tiny
+  // jitter mousemove events with no deliberate movement, which immediately
+  // un-suppress it and let it snap the highlight back to whatever row ends
+  // up under the still-stationary cursor. Instead, suppress on a deliberate
+  // timer that nothing but our own next keypress can extend.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
@@ -436,15 +442,29 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
       if (!next || next.id === hoveredIdRef.current) return
 
       hoveredIdRef.current = next.id
-      lastInputRef.current = 'keyboard'
       selectCitizen(next.id)
+
+      suppressMouseSyncRef.current = true
+      if (suppressMouseSyncTimerRef.current !== null) {
+        clearTimeout(suppressMouseSyncTimerRef.current)
+      }
+      suppressMouseSyncTimerRef.current = setTimeout(() => {
+        suppressMouseSyncRef.current = false
+        suppressMouseSyncTimerRef.current = null
+      }, 200)
+
       document
         .querySelector(`[data-citizen-id="${CSS.escape(next.id)}"]`)
         ?.scrollIntoView({ block: 'nearest' })
     }
 
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (suppressMouseSyncTimerRef.current !== null) {
+        clearTimeout(suppressMouseSyncTimerRef.current)
+      }
+    }
   }, [selectCitizen])
 
   const handleIssue = useCallback((citizen: Citizen) => {
@@ -581,7 +601,6 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
           onMouseMove={(e) => {
             pointerRef.current = { x: e.clientX, y: e.clientY }
-            lastInputRef.current = 'mouse'
           }}
         >
         <RetroScrollArea onScroll={syncSelectionToPointer}>
@@ -607,7 +626,10 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
                 isHovered={hoveredId === c.id}
                 isNew={c.id === myCitizenId}
                 collapsed={isCreating}
-                onHover={() => selectCitizen(c.id)}
+                onHover={() => {
+                  if (suppressMouseSyncRef.current) return
+                  selectCitizen(c.id)
+                }}
               />
             ))
           )}
