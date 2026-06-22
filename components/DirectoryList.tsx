@@ -252,6 +252,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const [myCitizenId, setMyCitizenId] = useState<string | null>(null)
   const [justGrew, setJustGrew] = useState(false)
   const pointerRef = useRef({ x: 0, y: 0 })
+  const lastInputRef = useRef<'mouse' | 'keyboard'>('mouse')
   const myCitizenIdRef = useRef<string | null>(null)
   const rightColRef = useRef<HTMLDivElement>(null)
   const rightContentRef = useRef<HTMLDivElement>(null)
@@ -329,7 +330,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   }, [])
 
   const syncSelectionToPointer = useCallback(() => {
-    if (panelMode !== 'view') return
+    if (panelMode !== 'view' || lastInputRef.current !== 'mouse') return
     const { x, y } = pointerRef.current
     const el = document.elementFromPoint(x, y)
     const row = el?.closest('[data-directory-row]')
@@ -390,6 +391,38 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
   const hoveredCitizen =
     filtered.find((c) => c.id === hoveredId) ?? filtered[0] ?? null
+
+  // Arrow keys move the highlight through the (possibly search-filtered) list
+  // and scroll the newly highlighted row into view. Mouse-driven highlighting
+  // (syncSelectionToPointer) is suppressed until the next real mouse move so
+  // the scroll this triggers doesn't immediately reassign the highlight back
+  // to whatever row ends up under the now-stale pointer position.
+  useEffect(() => {
+    if (panelMode !== 'view' || filtered.length === 0) return
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      e.preventDefault()
+
+      const currentIndex = filtered.findIndex((c) => c.id === hoveredId)
+      const delta = e.key === 'ArrowDown' ? 1 : -1
+      const nextIndex =
+        currentIndex === -1
+          ? 0
+          : Math.min(Math.max(currentIndex + delta, 0), filtered.length - 1)
+      const next = filtered[nextIndex]
+      if (!next || next.id === hoveredId) return
+
+      lastInputRef.current = 'keyboard'
+      selectCitizen(next.id)
+      document
+        .querySelector(`[data-citizen-id="${CSS.escape(next.id)}"]`)
+        ?.scrollIntoView({ block: 'nearest' })
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [panelMode, filtered, hoveredId, selectCitizen])
 
   const handleIssue = useCallback((citizen: Citizen) => {
     setPrintingCitizen(citizen)
@@ -525,6 +558,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
           onMouseMove={(e) => {
             pointerRef.current = { x: e.clientX, y: e.clientY }
+            lastInputRef.current = 'mouse'
           }}
         >
         <RetroScrollArea onScroll={syncSelectionToPointer}>
