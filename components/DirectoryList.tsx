@@ -254,6 +254,9 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const pointerRef = useRef({ x: 0, y: 0 })
   const lastInputRef = useRef<'mouse' | 'keyboard'>('mouse')
   const myCitizenIdRef = useRef<string | null>(null)
+  const hoveredIdRef = useRef<string | null>(null)
+  const filteredRef = useRef<Citizen[]>(initialCitizens)
+  const panelModeRef = useRef<RightPanelMode>('view')
   const rightColRef = useRef<HTMLDivElement>(null)
   const rightContentRef = useRef<HTMLDivElement>(null)
   const [rightScale, setRightScale] = useState(1)
@@ -261,6 +264,14 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   useEffect(() => {
     myCitizenIdRef.current = myCitizenId
   }, [myCitizenId])
+
+  useEffect(() => {
+    hoveredIdRef.current = hoveredId
+  }, [hoveredId])
+
+  useEffect(() => {
+    panelModeRef.current = panelMode
+  }, [panelMode])
 
   // Scale the spotlight+ad block to fill the same height as the directory
   // list beside it, rather than leaving empty space below a small, top-aligned
@@ -392,27 +403,39 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const hoveredCitizen =
     filtered.find((c) => c.id === hoveredId) ?? filtered[0] ?? null
 
-  // Arrow keys move the highlight through the (possibly search-filtered) list
-  // and scroll the newly highlighted row into view. Mouse-driven highlighting
-  // (syncSelectionToPointer) is suppressed until the next real mouse move so
-  // the scroll this triggers doesn't immediately reassign the highlight back
-  // to whatever row ends up under the now-stale pointer position.
   useEffect(() => {
-    if (panelMode !== 'view' || filtered.length === 0) return
+    filteredRef.current = filtered
+  }, [filtered])
 
+  // Arrow keys move the highlight through the (possibly search-filtered) list
+  // and scroll the newly highlighted row into view. The listener is attached
+  // once and reads current state via refs rather than closing over filtered/
+  // hoveredId — those change on every keypress, and re-subscribing the
+  // listener each render is too slow to keep up with OS key-repeat, which
+  // was letting several keydowns in a row land on the same stale closure and
+  // recompute the same "next" row instead of advancing.
+  // Mouse-driven highlighting (syncSelectionToPointer) is suppressed until
+  // the next real mouse move so the scroll this triggers doesn't immediately
+  // reassign the highlight back to whatever row ends up under the now-stale
+  // pointer position.
+  useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      if (panelModeRef.current !== 'view') return
+      const list = filteredRef.current
+      if (list.length === 0) return
       e.preventDefault()
 
-      const currentIndex = filtered.findIndex((c) => c.id === hoveredId)
+      const currentIndex = list.findIndex((c) => c.id === hoveredIdRef.current)
       const delta = e.key === 'ArrowDown' ? 1 : -1
       const nextIndex =
         currentIndex === -1
           ? 0
-          : Math.min(Math.max(currentIndex + delta, 0), filtered.length - 1)
-      const next = filtered[nextIndex]
-      if (!next || next.id === hoveredId) return
+          : Math.min(Math.max(currentIndex + delta, 0), list.length - 1)
+      const next = list[nextIndex]
+      if (!next || next.id === hoveredIdRef.current) return
 
+      hoveredIdRef.current = next.id
       lastInputRef.current = 'keyboard'
       selectCitizen(next.id)
       document
@@ -422,7 +445,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [panelMode, filtered, hoveredId, selectCitizen])
+  }, [selectCitizen])
 
   const handleIssue = useCallback((citizen: Citizen) => {
     setPrintingCitizen(citizen)
