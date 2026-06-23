@@ -93,7 +93,10 @@ export default function RightPanel({
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 14,
+          // Flex gap applies between items even when one has collapsed to
+          // zero height — without this, a 14px gap floats above the
+          // (invisible) print ad whenever it's collapsed.
+          gap: collapsePanels ? 0 : 14,
           width: '100%',
         }}
       >

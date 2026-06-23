@@ -876,6 +876,14 @@ body {
     flex-direction: column !important;
   }
 
+  /* Once the spotlight has shrunk to just the bare card (or further, to
+   * nothing at all), the 32px gap meant for a full-size spotlight is mostly
+   * just dead space pushing the list down — tighten it so the list claims
+   * that room back. */
+  .directory-columns--condensed {
+    gap: 10px !important;
+  }
+
   /* Pinned at the top, sized to its own content — not part of the scroll */
   .directory-detail-col {
     order: 1 !important;

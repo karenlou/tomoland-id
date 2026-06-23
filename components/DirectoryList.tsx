@@ -279,9 +279,8 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
    * scrolling the list, or any gesture). Guards the device-ownership restore
    * below — that lookup is an async network request and can resolve well
    * after the user has already started browsing/scrolling, and forcing the
-   * view back to "your own ID" at that point both yanks away whatever they
-   * were looking at and (via isOwnSelected) snaps the collapsed spotlight
-   * back open out of nowhere. Once the user has done anything, the
+   * view back to "your own ID" at that point yanks away whatever they were
+   * looking at out of nowhere. Once the user has done anything, the
    * restoration is skipped — myCitizenId itself still gets set either way,
    * just not the forced hoveredId jump. */
   const userInteractedRef = useRef(false)
@@ -464,18 +463,12 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   const hoveredCitizen =
     filtered.find((c) => c.id === hoveredId) ?? filtered[0] ?? null
 
-  const isOwnSelected = Boolean(
-    hoveredCitizen && myCitizenId && hoveredCitizen.id === myCitizenId,
-  )
-  /** Own ID always forces 'expanded' regardless of scroll — the manage
-   * buttons live in the welcome bar and need to stay reachable. */
-  const effectiveSpotlightStage = isOwnSelected ? 'expanded' : spotlightStage
   /** Print ad — hidden in both 'collapsed' and 'partial', only shown once
    * fully back at the top. */
-  const collapsePrintAd = isMobile && effectiveSpotlightStage !== 'expanded'
+  const collapsePrintAd = isMobile && spotlightStage !== 'expanded'
   /** Welcome bar — hidden only while fully 'collapsed'; scrolling up softens
    * straight back to showing it ('partial'), even before reaching the top. */
-  const collapseWelcomeBar = isMobile && effectiveSpotlightStage === 'collapsed'
+  const collapseWelcomeBar = isMobile && spotlightStage === 'collapsed'
 
   useEffect(() => {
     filteredRef.current = filtered
@@ -574,6 +567,11 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
     if (myCitizenId) {
       setHoveredId(myCitizenId)
       setPanelMode('view')
+      // One-time reset, not a standing override — fully visible the moment
+      // you land here, but scrolling afterward collapses/expands normally
+      // again, exactly as if you'd scrolled back to the top yourself.
+      setSpotlightStage('expanded')
+      scrollDirectionAnchorRef.current = rowsScrollRef.current?.scrollTop ?? 0
     }
   }, [myCitizenId])
 
@@ -640,7 +638,7 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
 
   return (
     <div
-      className="directory-columns"
+      className={`directory-columns${spotlightStage !== 'expanded' ? ' directory-columns--condensed' : ''}`}
       style={{
         flex: 1,
         display: 'flex',
