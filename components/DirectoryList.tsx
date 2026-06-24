@@ -315,6 +315,9 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
    * out from under the user's thumb — "expanded" eats real vertical space
    * up here, it isn't free. */
   const scrollDirectionAnchorRef = useRef(0)
+  /** Pending "settle into expanded" timer — see the top-of-list handling in
+   * onScroll below. */
+  const expandSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [rightScale, setRightScale] = useState(1)
   const isMobile = useIsMobile()
 
@@ -329,6 +332,14 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
   useEffect(() => {
     panelModeRef.current = panelMode
   }, [panelMode])
+
+  useEffect(() => {
+    return () => {
+      if (expandSettleTimerRef.current !== null) {
+        clearTimeout(expandSettleTimerRef.current)
+      }
+    }
+  }, [])
 
   // Scale the spotlight+ad block to fill the same height as the directory
   // list beside it, rather than leaving empty space below a small, top-aligned
@@ -733,20 +744,52 @@ export default function DirectoryList({ initialCitizens }: DirectoryListProps) {
           onScroll={(e) => {
             if (!isMobile) return
             userInteractedRef.current = true
-            const top = e.currentTarget.scrollTop
+            const el = e.currentTarget
+            const top = el.scrollTop
 
+            // Near the top: don't commit to 'expanded' the instant we pass
+            // through this zone — only once the position has actually
+            // rested here for a real beat. A short debounce still reads as
+            // "snaps the moment you touch the top"; this needs to feel like
+            // a deliberate stop, not a flicker, so it's a half-second of
+            // sustained rest before the layout change (the spotlight
+            // growing, eating back the list's height) actually commits.
             if (top <= 4) {
-              setSpotlightStage('expanded')
-              scrollDirectionAnchorRef.current = top
+              if (expandSettleTimerRef.current === null) {
+                expandSettleTimerRef.current = setTimeout(() => {
+                  setSpotlightStage('expanded')
+                  scrollDirectionAnchorRef.current = rowsScrollRef.current?.scrollTop ?? 0
+                  expandSettleTimerRef.current = null
+                }, 500)
+              }
               return
             }
+
+            if (expandSettleTimerRef.current !== null) {
+              clearTimeout(expandSettleTimerRef.current)
+              expandSettleTimerRef.current = null
+            }
+
+            // Near the bottom: iOS rubber-band overscroll bounces back from
+            // the boundary with a sharp scrollTop decrease that has nothing
+            // to do with the user actually scrolling up — left unguarded,
+            // that bounce alone crossed the direction threshold below and
+            // popped 'partial' open right as the list hit its end, fighting
+            // the user's thumb there the same way the top did.
+            const maxTop = el.scrollHeight - el.clientHeight
+            const nearBottom = maxTop > 0 && top >= maxTop - 12
 
             const delta = top - scrollDirectionAnchorRef.current
             if (delta > 24) {
               setSpotlightStage('collapsed')
               scrollDirectionAnchorRef.current = top
-            } else if (delta < -24) {
+            } else if (delta < -24 && !nearBottom) {
               setSpotlightStage('partial')
+              scrollDirectionAnchorRef.current = top
+            } else if (nearBottom) {
+              // Re-anchor without changing stage, so a *genuine* upward
+              // scroll starting from here is still measured fresh once the
+              // user actually moves away from the bottom edge.
               scrollDirectionAnchorRef.current = top
             }
           }}

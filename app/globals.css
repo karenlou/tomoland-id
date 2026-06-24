@@ -923,6 +923,16 @@ body {
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* Print-reveal actions (Download / Share to X / Done) — up to three
+   * buttons sharing one row via flex fractions sized for desktop; on a
+   * narrow screen that left each one too condensed to fit its own label,
+   * so they stack instead. align-items defaults to stretch, so switching
+   * to column is enough to make each button full width on its own row. */
+  .retro-print-action-row,
+  .retro-download-group {
+    flex-direction: column !important;
+  }
 }
 
 /* Generic smooth collapse-to-zero-height — mobile sticky spotlight effect */
