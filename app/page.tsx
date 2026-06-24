@@ -17,7 +17,6 @@ async function getCitizens(): Promise<Citizen[]> {
       'id, citizen_number, name, relation_to_tomo, place_of_issue, photo_url, created_at, tomoland_id',
     )
     .order('citizen_number', { ascending: true })
-    .limit(200)
 
   return (data as Citizen[]) ?? []
 }
