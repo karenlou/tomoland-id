@@ -106,6 +106,26 @@ are stable. Faces are copied to `public/faces/<slug>-<id>.png` and served same-o
 
 ---
 
+## One-off / manual cards (not from the folder)
+
+Sometimes you make a single card outside the batch — a pasted photo, a logo, a filler.
+- **Pasted image**: crop the face with PIL (center on the face, keep clear of the bottom-right
+  mascot badge), then put an explicit `name` AND `role` in the worklist entry. `role` overrides the
+  random `roleFor()` (e.g. `"Tomo's Security Guard"`). No `pageId` → render+`--open` only, hand over
+  the PNG (don't upload unless a CRM row is intended).
+- **Logo rows** (Capy/Slash/spotted_in_prod): set a clean display `name` (strip CRM parenthetical
+  notes like "(we are customers…)") and a manual `role` (Slash → `"Tomo's Bank"`). The card `name`
+  is independent of the messy CRM Name field — leave the CRM field unless asked to tidy it.
+- **Filler / gag**: the CRM is an internal launch-party gag, so a deliberately-random stand-in is
+  fine when asked (e.g. Dan Seals — no handle — got a random "Dan Burns" headshot a subagent found).
+
+## Finding a face when there's no folder photo and no clean avatar
+
+Web-search subagent: hand it name + LinkedIn + role context, ask for a **direct image URL** of a
+recurring face (same person across 2+ sources). GitHub avatars (`avatars.githubusercontent.com/u/<id>`)
+and company team-page headshots work well and are directly downloadable. Label confidence; **verify
+it's a real face** (Read the image) before rendering. Worked for Jaiveer (GitHub avatar, medium conf).
+
 ## Notion file-upload write-back (the 3-call dance)
 
 There is **no bulk update** — each card is 3 calls, fanned out concurrently with 429+network retry:
@@ -151,6 +171,16 @@ doesn't kill the batch.
   Nitasha's chyron). Crop them out; a "better" tag isn't always actually better — still review.
 - **ID numbering** — never reuse 1–335; assign from 336 up. Early ad-hoc cards used placeholder
   ids (Riley `TOMO-9002`) that had to be renumbered — assign real sequential ids from the start.
+- **Apify Twitter actor silently returns the WRONG person** when a handle is dead/protected/renamed —
+  it hands back an unrelated cached account instead of erroring. **Always check the returned
+  `userName` equals the requested handle (case-insensitive) before using `profilePicture`.** Burned:
+  `annbordetsky`→"Eric Bahn", `mohith_dzn`/`austinmoninger`→swyx/kentcdodds junk. A 0-item response
+  is also valid-but-empty — don't treat the first item as truth.
+- **Notion full-DB REST scan times out** (~495 rows, 60s) — use a targeted `title contains` filter
+  query instead of paginating the whole DB to find one row.
+- **CRM names contain control characters** — `json.loads(..., strict=False)` is required (raw
+  `json.load` throws "Invalid control character"), and names can have a **leading newline** (Slash is
+  `"\nSlash (…)"`), so `.startswith()`/exact-match checks fail — `.strip()` and normalize first.
 
 ---
 
