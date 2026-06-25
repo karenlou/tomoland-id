@@ -1,32 +1,20 @@
+import { CONTENT_LEFT, PHOTO_H, PHOTO_TOP, PHOTO_W } from '@/lib/partyCardLayout'
+
 /**
  * Waits for every <img> inside `node` to finish a real decode (not just a
- * network-complete event) before handing off to html-to-image. html-to-image
- * rasterizes by serializing the DOM into an SVG <foreignObject> and drawing
- * that through a fresh Image — on Safari/WebKit (every iOS browser, since
- * Apple requires it) that pipeline is known to silently drop embedded
- * raster images if they haven't fully decoded yet, and a card mounted
- * fresh just for capture (rather than one already sitting on screen) is
- * far more likely to still be mid-decode, especially over a mobile
- * connection — that's the gap this closes.
+ * network-complete event) before handing off to html-to-image.
  */
 async function waitForImages(node: HTMLElement): Promise<void> {
   const images = Array.from(node.querySelectorAll('img'))
   await Promise.all(
     images.map((img) =>
       img.decode().catch(() => {
-        // A handful of legitimate cases (already-broken image, certain
-        // cached responses) reject decode() even though the image still
-        // paints fine — one rejection shouldn't block the whole capture.
+        // decode() can reject on broken/cached edge cases — don't block capture
       }),
     ),
   )
 }
 
-/** Every face actually declared in globals.css — see the @font-face block
- * there. The card's text only renders in the intended typeface (rather than
- * silently falling back to Space Mono/Georgia/system-ui) once these have
- * actually finished fetching, and like the photo, that's far less likely to
- * have happened yet for a card mounted fresh just for capture. */
 const CARD_FONTS = [
   "700 16px 'Reform ST Trial'",
   "700 16px 'GT Mechanik Mono Trial'",
@@ -40,11 +28,7 @@ async function waitForFonts(): Promise<void> {
   await document.fonts.ready.catch(() => {})
 }
 
-/** Fetches `url` and returns it as a data URI, so the capture target's <img>
- * never depends on html-to-image's own (separately CORS-gated) fetch of a
- * remote resource — by the time it's assigned, the bytes are already in
- * hand. Returns null on any failure so callers can fall back to the
- * original URL rather than lose the whole capture over a missing photo. */
+/** Fetches `url` and returns it as a data URI. Returns null on failure. */
 export async function toDataUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
@@ -61,17 +45,17 @@ export async function toDataUrl(url: string): Promise<string | null> {
   }
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+function loadImage(src: string, crossOrigin = false): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
+    if (crossOrigin) img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => reject(new Error('image failed to load'))
     img.src = src
   })
 }
 
-/** Source rectangle that replicates CSS `object-fit: cover` — crops to the
- * target's aspect ratio (centered) rather than stretching. */
+/** Source rectangle that replicates CSS `object-fit: cover`. */
 function coverCrop(naturalW: number, naturalH: number, targetW: number, targetH: number) {
   const targetRatio = targetW / targetH
   const srcRatio = naturalW / naturalH
@@ -84,116 +68,147 @@ function coverCrop(naturalW: number, naturalH: number, targetW: number, targetH:
 }
 
 const PIXEL_RATIO = 2
+const PHOTO_BORDER = 3
+const PHOTO_RADIUS = 4
+
+/** Photo slot in canvas pixels — derived from locked card layout constants
+ * rather than getBoundingClientRect, so off-screen capture targets and
+ * scaled-on-screen previews all agree. */
+function photoSlotRect() {
+  const x = CONTENT_LEFT * PIXEL_RATIO
+  const y = PHOTO_TOP * PIXEL_RATIO
+  const w = PHOTO_W * PIXEL_RATIO
+  const h = PHOTO_H * PIXEL_RATIO
+  const b = PHOTO_BORDER * PIXEL_RATIO
+  return {
+    x: x + b,
+    y: y + b,
+    w: w - b * 2,
+    h: h - b * 2,
+    radius: PHOTO_RADIUS * PIXEL_RATIO,
+  }
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.arcTo(x + w, y, x + w, y + h, radius)
+  ctx.arcTo(x + w, y + h, x, y + h, radius)
+  ctx.arcTo(x, y + h, x, y, radius)
+  ctx.arcTo(x, y, x + w, y, radius)
+  ctx.closePath()
+}
+
+async function loadPhotoForCapture(
+  photoUrl: string,
+  domImg: HTMLImageElement | null,
+): Promise<HTMLImageElement | null> {
+  const inlined = await toDataUrl(photoUrl)
+  if (inlined) {
+    try {
+      return await loadImage(inlined)
+    } catch {
+      // fall through
+    }
+  }
+
+  if (domImg?.complete && domImg.naturalWidth > 0) {
+    return domImg
+  }
+
+  try {
+    return await loadImage(photoUrl, true)
+  } catch {
+    return null
+  }
+}
+
+function compositePhotoUnderCard(
+  cardCanvas: HTMLCanvasElement,
+  photo: CanvasImageSource,
+) {
+  const out = document.createElement('canvas')
+  out.width = cardCanvas.width
+  out.height = cardCanvas.height
+  const ctx = out.getContext('2d')
+  if (!ctx) return cardCanvas
+
+  const { x, y, w, h, radius } = photoSlotRect()
+  const source = photo as HTMLImageElement
+  const naturalW = 'naturalWidth' in source ? source.naturalWidth : w
+  const naturalH = 'naturalHeight' in source ? source.naturalHeight : h
+  const { sx, sy, sw, sh } = coverCrop(naturalW, naturalH, w, h)
+
+  ctx.save()
+  roundRectPath(ctx, x, y, w, h, radius)
+  ctx.clip()
+  ctx.drawImage(photo, sx, sy, sw, sh, x, y, w, h)
+  ctx.restore()
+
+  // Card chrome (border, badge, text) on top — transparent photo hole shows through.
+  ctx.drawImage(cardCanvas, 0, 0)
+  return out
+}
 
 /**
- * The citizen's own photo is the one image in the card that's remote and
- * user-supplied, and the one actually reported missing from captures on
- * mobile — even after fully decoding it and inlining it as a data URI
- * beforehand, on some devices it still doesn't show up. html-to-image
- * rasterizes by serializing the DOM into an SVG <foreignObject> and drawing
- * that through a fresh Image; embedding a *user photo* specifically into
- * that pipeline is the known-unreliable part on Safari/WebKit. Desktop
- * never had this problem, so it keeps the plain, original toPng() call
- * untouched rather than paying for a fix it doesn't need.
- *
- * On mobile, everything else in the card (text, borders, the rotated
- * mascot badge sticker that overlaps one corner of the photo) renders fine
- * through html-to-image, so this only routes around the photo: the slot is
- * made transparent for the html-to-image pass, then the real photo —
- * fetched fresh from wherever it's actually stored (photoUrl, the same URL
- * the card displays it from normally) — is drawn straight onto the
- * resulting canvas with a plain drawImage() call, composited *behind* the
- * existing (opaque) pixels via 'destination-over'. That fills exactly the
- * transparent hole — i.e. the rounded photo rect minus whatever sliver of
- * the badge overlaps it — without needing to separately replicate the
- * border-radius clip or the badge's rotation/clipping math by hand.
+ * Mobile Safari drops user photos inside html-to-image's foreignObject pass even
+ * when they're inlined as data URIs. Desktop is unaffected, so it keeps plain
+ * toPng(). On mobile the photo is painted onto a canvas first, then the card
+ * (captured with the photo hidden so the slot is transparent) is layered on top.
  */
 export async function captureCardPng(
   node: HTMLElement,
   photoUrl: string | null | undefined,
   isMobile: boolean,
 ): Promise<string> {
+  const { toPng, toCanvas } = await import('html-to-image')
+
   if (!isMobile) {
-    const { toPng } = await import('html-to-image')
     return toPng(node, { pixelRatio: PIXEL_RATIO })
   }
 
-  const slot = photoUrl ? node.querySelector<HTMLElement>('[data-card-photo-slot]') : null
-  const photoImg = slot?.querySelector<HTMLImageElement>('img[data-card-photo]') ?? null
-  const originalBackground = slot?.style.background ?? ''
-  const originalDisplay = photoImg?.style.display ?? ''
+  const photoImg = node.querySelector<HTMLImageElement>('img[data-card-photo]')
 
-  if (slot && photoImg) {
-    slot.style.background = 'transparent'
-    photoImg.style.display = 'none'
-  }
+  await Promise.all([waitForImages(node), waitForFonts()])
 
-  let canvas: HTMLCanvasElement
+  const photo =
+    photoUrl && photoImg
+      ? await loadPhotoForCapture(photoUrl, photoImg)
+      : null
+
+  node.setAttribute('data-capturing', 'true')
+
+  let cardCanvas: HTMLCanvasElement
   try {
-    await Promise.all([waitForImages(node), waitForFonts()])
-    const { toCanvas } = await import('html-to-image')
-    canvas = await toCanvas(node, { pixelRatio: PIXEL_RATIO })
+    cardCanvas = await toCanvas(node, {
+      pixelRatio: PIXEL_RATIO,
+      backgroundColor: 'rgba(0,0,0,0)',
+      cacheBust: true,
+    })
   } finally {
-    if (slot && photoImg) {
-      slot.style.background = originalBackground
-      photoImg.style.display = originalDisplay
-    }
+    node.removeAttribute('data-capturing')
   }
 
-  if (slot && photoUrl) {
-    try {
-      const inlined = await toDataUrl(photoUrl)
-      if (inlined) {
-        const img = await loadImage(inlined)
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          const nodeRect = node.getBoundingClientRect()
-          const slotRect = slot.getBoundingClientRect()
-          // Dividing by the *rendered* size rather than assuming pixelRatio
-          // accounts for any CSS scale() on an ancestor — IdSpotlight and
-          // RetroPrinter both display the card scaled down from its native
-          // size, while DownloadList's off-screen capture target doesn't.
-          const scaleX = (nodeRect.width / node.offsetWidth) || 1
-          const scaleY = (nodeRect.height / node.offsetHeight) || 1
-          const x = ((slotRect.left - nodeRect.left) / scaleX) * PIXEL_RATIO
-          const y = ((slotRect.top - nodeRect.top) / scaleY) * PIXEL_RATIO
-          const w = (slotRect.width / scaleX) * PIXEL_RATIO
-          const h = (slotRect.height / scaleY) * PIXEL_RATIO
-
-          const { sx, sy, sw, sh } = coverCrop(img.naturalWidth, img.naturalHeight, w, h)
-          ctx.save()
-          ctx.globalCompositeOperation = 'destination-over'
-          ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
-          ctx.restore()
-        }
-      }
-    } catch {
-      // best-effort — if this fails, the capture still has everything else
-    }
+  if (!photoUrl || !photo) {
+    return cardCanvas.toDataURL('image/png')
   }
 
-  return canvas.toDataURL('image/png')
+  const result = compositePhotoUnderCard(cardCanvas, photo)
+  try {
+    return result.toDataURL('image/png')
+  } catch {
+    return cardCanvas.toDataURL('image/png')
+  }
 }
 
-/**
- * Saves a captured card PNG (the data URL from captureCardPng). Desktop
- * already worked perfectly with a plain <a download> click on the raw data:
- * URI, so that's untouched here too.
- *
- * On mobile, where the Web Share API supports files (iOS Safari 16.4+,
- * most mobile Chrome), this opens the native share sheet with the image
- * attached — the user gets a "Save Image" option that writes straight to
- * Photos. That replaces clicking a synthetic <a download> on a data: URI,
- * which on iOS Safari pops up a "Download from data:image/png;base64,..."
- * sheet that dumps the entire base64 payload as visible text (reads as
- * broken/suspicious) and, even once confirmed, lands in the Files app
- * rather than Photos.
- *
- * Falls back to a blob-URL download (not the raw data: URI — that's the
- * same thing that makes the dialog ugly in the first place, and some
- * browsers cap data: URI length) for mobile browsers without file-sharing
- * support.
- */
 export async function downloadCardImage(
   dataUrl: string,
   filename: string,
@@ -216,8 +231,6 @@ export async function downloadCardImage(
         await navigator.share({ files: [file] })
         return
       } catch (err) {
-        // The user dismissing the share sheet is a real choice, not a
-        // failure — don't fall through to also force a second download.
         if (err instanceof Error && err.name === 'AbortError') return
       }
     }
@@ -228,7 +241,5 @@ export async function downloadCardImage(
   link.download = filename
   link.href = url
   link.click()
-  // Revoking immediately can race the browser's own download handoff in
-  // some implementations; a short delay is the common workaround.
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

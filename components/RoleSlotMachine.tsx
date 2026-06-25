@@ -318,6 +318,7 @@ export default function RoleSlotMachine({
             compactButton ? (
               <button
                 type="button"
+                data-sound-click="off"
                 onClick={pull}
                 disabled={phase === 'spinning'}
                 aria-label={phase === 'done' ? 'Reroll role' : 'Randomize role'}
@@ -330,6 +331,7 @@ export default function RoleSlotMachine({
             ) : (
               <button
                 type="button"
+                data-sound-click="off"
                 onClick={pull}
                 disabled={phase === 'spinning'}
                 aria-label="Randomize role"
@@ -356,6 +358,7 @@ export default function RoleSlotMachine({
               <div aria-hidden style={leverRailStyle} />
               <button
                 type="button"
+                data-sound-click="off"
                 onPointerDown={handleKnobPointerDown}
                 onPointerMove={handleKnobPointerMove}
                 onPointerUp={handleKnobPointerUp}
