@@ -209,8 +209,8 @@ export default function IdSpotlight({
     if (!cardRef.current || downloading || !citizen) return
     setDownloading(true)
     try {
-      const dataUrl = await captureCardPng(cardRef.current, citizen.photo_url)
-      await downloadCardImage(dataUrl, `${citizen.tomoland_id || 'tomoland-id'}.png`)
+      const dataUrl = await captureCardPng(cardRef.current, citizen.photo_url, isMobile)
+      await downloadCardImage(dataUrl, `${citizen.tomoland_id || 'tomoland-id'}.png`, isMobile)
     } catch {
       // best-effort — no on-screen fallback needed here, the card is always visible
     } finally {

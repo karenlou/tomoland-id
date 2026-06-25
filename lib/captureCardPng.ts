@@ -87,24 +87,37 @@ const PIXEL_RATIO = 2
 
 /**
  * The citizen's own photo is the one image in the card that's remote and
- * user-supplied, and the one actually reported missing from captures — even
- * after fully decoding it and inlining it as a data URI beforehand, on some
- * devices it still doesn't show up. html-to-image rasterizes by serializing
- * the DOM into an SVG <foreignObject> and drawing that through a fresh
- * Image; embedding a *user photo* specifically into that pipeline is the
- * known-unreliable part on Safari/WebKit. Everything else in the card
- * (text, borders, the rotated mascot badge sticker that overlaps one corner
- * of the photo) renders fine through it, so this only routes around the
- * photo: the slot is made transparent for the html-to-image pass, then the
- * real photo — fetched fresh from wherever it's actually stored (photoUrl,
- * the same URL the card displays it from normally) — is drawn straight onto
- * the resulting canvas with a plain drawImage() call, composited *behind*
- * the existing (opaque) pixels via 'destination-over'. That fills exactly
- * the transparent hole — i.e. the rounded photo rect minus whatever sliver
- * of the badge overlaps it — without needing to separately replicate the
+ * user-supplied, and the one actually reported missing from captures on
+ * mobile — even after fully decoding it and inlining it as a data URI
+ * beforehand, on some devices it still doesn't show up. html-to-image
+ * rasterizes by serializing the DOM into an SVG <foreignObject> and drawing
+ * that through a fresh Image; embedding a *user photo* specifically into
+ * that pipeline is the known-unreliable part on Safari/WebKit. Desktop
+ * never had this problem, so it keeps the plain, original toPng() call
+ * untouched rather than paying for a fix it doesn't need.
+ *
+ * On mobile, everything else in the card (text, borders, the rotated
+ * mascot badge sticker that overlaps one corner of the photo) renders fine
+ * through html-to-image, so this only routes around the photo: the slot is
+ * made transparent for the html-to-image pass, then the real photo —
+ * fetched fresh from wherever it's actually stored (photoUrl, the same URL
+ * the card displays it from normally) — is drawn straight onto the
+ * resulting canvas with a plain drawImage() call, composited *behind* the
+ * existing (opaque) pixels via 'destination-over'. That fills exactly the
+ * transparent hole — i.e. the rounded photo rect minus whatever sliver of
+ * the badge overlaps it — without needing to separately replicate the
  * border-radius clip or the badge's rotation/clipping math by hand.
  */
-export async function captureCardPng(node: HTMLElement, photoUrl?: string | null): Promise<string> {
+export async function captureCardPng(
+  node: HTMLElement,
+  photoUrl: string | null | undefined,
+  isMobile: boolean,
+): Promise<string> {
+  if (!isMobile) {
+    const { toPng } = await import('html-to-image')
+    return toPng(node, { pixelRatio: PIXEL_RATIO })
+  }
+
   const slot = photoUrl ? node.querySelector<HTMLElement>('[data-card-photo-slot]') : null
   const photoImg = slot?.querySelector<HTMLImageElement>('img[data-card-photo]') ?? null
   const originalBackground = slot?.style.background ?? ''
@@ -163,22 +176,37 @@ export async function captureCardPng(node: HTMLElement, photoUrl?: string | null
 }
 
 /**
- * Saves a captured card PNG (the data URL from captureCardPng). Where the
- * Web Share API supports files (iOS Safari 16.4+, most mobile Chrome), this
- * opens the native share sheet with the image attached — the user gets a
- * "Save Image" option that writes straight to Photos. That replaces
- * clicking a synthetic <a download> on a data: URI, which on iOS Safari
- * pops up a "Download from data:image/png;base64,..." sheet that dumps the
- * entire base64 payload as visible text (reads as broken/suspicious) and,
- * even once confirmed, lands in the Files app rather than Photos.
+ * Saves a captured card PNG (the data URL from captureCardPng). Desktop
+ * already worked perfectly with a plain <a download> click on the raw data:
+ * URI, so that's untouched here too.
  *
- * Falls back to a normal blob-URL download for browsers without
- * file-sharing support — every desktop browser this app targets today,
- * where the old approach already worked fine. A blob: URL rather than the
- * raw data: URI here too, since that's the same thing that makes the dialog
- * ugly on iOS in the first place, and some browsers cap data: URI length.
+ * On mobile, where the Web Share API supports files (iOS Safari 16.4+,
+ * most mobile Chrome), this opens the native share sheet with the image
+ * attached — the user gets a "Save Image" option that writes straight to
+ * Photos. That replaces clicking a synthetic <a download> on a data: URI,
+ * which on iOS Safari pops up a "Download from data:image/png;base64,..."
+ * sheet that dumps the entire base64 payload as visible text (reads as
+ * broken/suspicious) and, even once confirmed, lands in the Files app
+ * rather than Photos.
+ *
+ * Falls back to a blob-URL download (not the raw data: URI — that's the
+ * same thing that makes the dialog ugly in the first place, and some
+ * browsers cap data: URI length) for mobile browsers without file-sharing
+ * support.
  */
-export async function downloadCardImage(dataUrl: string, filename: string): Promise<void> {
+export async function downloadCardImage(
+  dataUrl: string,
+  filename: string,
+  isMobile: boolean,
+): Promise<void> {
+  if (!isMobile) {
+    const link = document.createElement('a')
+    link.download = filename
+    link.href = dataUrl
+    link.click()
+    return
+  }
+
   const blob = await (await fetch(dataUrl)).blob()
 
   if (navigator.canShare && navigator.share) {

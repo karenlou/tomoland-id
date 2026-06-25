@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import CitizenCard, { CitizenCardThumbnail } from './CitizenCard'
 import { CARD_BORDER_RADIUS, CARD_H, CARD_W } from '@/lib/cardConstants'
 import { captureCardPng, downloadCardImage } from '@/lib/captureCardPng'
+import { useIsMobile } from '@/lib/useIsMobile'
 import type { Citizen } from '@/types'
 
 interface DownloadListProps {
@@ -34,6 +35,7 @@ export default function DownloadList({ citizens }: DownloadListProps) {
   const [downloadTarget, setDownloadTarget] = useState<Citizen | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const captureRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   const filtered = query.trim()
     ? citizens.filter((c) => c.name.toLowerCase().includes(query.trim().toLowerCase()))
@@ -47,9 +49,9 @@ export default function DownloadList({ citizens }: DownloadListProps) {
     async function run() {
       if (!captureRef.current) return
       try {
-        const dataUrl = await captureCardPng(captureRef.current, target.photo_url)
+        const dataUrl = await captureCardPng(captureRef.current, target.photo_url, isMobile)
         if (cancelled) return
-        await downloadCardImage(dataUrl, downloadFilename(target))
+        await downloadCardImage(dataUrl, downloadFilename(target), isMobile)
       } catch {
         // best-effort — the row's button just stops spinning, nothing else to fall back to
       } finally {
@@ -64,7 +66,7 @@ export default function DownloadList({ citizens }: DownloadListProps) {
     return () => {
       cancelled = true
     }
-  }, [downloadTarget])
+  }, [downloadTarget, isMobile])
 
   function handleDownloadClick(citizen: Citizen) {
     if (downloadingId) return
