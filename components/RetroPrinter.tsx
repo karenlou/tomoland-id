@@ -168,7 +168,12 @@ export default function RetroPrinter({ citizen, onComplete }: RetroPrinterProps)
     if (!cardRef.current || downloading) return
     setDownloading(true)
     try {
-      const dataUrl = await captureCardPng(cardRef.current, citizen.photo_url, isMobile)
+      const dataUrl = await captureCardPng(
+        cardRef.current,
+        citizen.photo_url,
+        isMobile,
+        citizen.id,
+      )
       await downloadCardImage(dataUrl, `${citizen.tomoland_id || 'tomoland-id'}.png`, isMobile)
       setDownloaded(true)
     } catch {

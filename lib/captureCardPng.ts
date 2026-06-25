@@ -1,4 +1,4 @@
-import { CONTENT_LEFT, PHOTO_H, PHOTO_TOP, PHOTO_W } from '@/lib/partyCardLayout'
+import { blobToDataUrl, getCitizenPhotoBlob } from '@/lib/citizenPhotoCache'
 
 /**
  * Waits for every <img> inside `node` to finish a real decode (not just a
@@ -9,7 +9,7 @@ async function waitForImages(node: HTMLElement): Promise<void> {
   await Promise.all(
     images.map((img) =>
       img.decode().catch(() => {
-        // decode() can reject on broken/cached edge cases — don't block capture
+        // decode() can reject on broken/cached edge cases — don't block capture.
       }),
     ),
   )
@@ -28,27 +28,64 @@ async function waitForFonts(): Promise<void> {
   await document.fonts.ready.catch(() => {})
 }
 
-/** Fetches `url` and returns it as a data URI. Returns null on failure. */
+const PIXEL_RATIO = 2
+
 export async function toDataUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
     if (!res.ok) return null
     const blob = await res.blob()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
+    return blobToDataUrl(blob)
   } catch {
     return null
   }
 }
 
-function loadImage(src: string, crossOrigin = false): Promise<HTMLImageElement> {
+async function fetchPhotoDataViaApi(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/photo-data?url=${encodeURIComponent(url)}`)
+    if (!res.ok) return null
+    const json = (await res.json()) as { dataUrl?: string }
+    return json.dataUrl ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Resolve user-photo bytes for compositing — local cache first, then inline
+ * URLs, then direct fetch, then the server proxy as a last resort. */
+async function resolvePhotoDataUrl(
+  photoUrl: string | null | undefined,
+  citizenId?: string | null,
+): Promise<string | null> {
+  if (citizenId) {
+    const cached = await getCitizenPhotoBlob(citizenId)
+    if (cached) {
+      return blobToDataUrl(cached)
+    }
+  }
+
+  if (!photoUrl) return null
+  if (photoUrl.startsWith('data:')) return photoUrl
+
+  if (photoUrl.startsWith('blob:')) {
+    try {
+      const blob = await (await fetch(photoUrl)).blob()
+      return blobToDataUrl(blob)
+    } catch {
+      return null
+    }
+  }
+
+  const inlined = await toDataUrl(photoUrl)
+  if (inlined) return inlined
+
+  return fetchPhotoDataViaApi(photoUrl)
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    if (crossOrigin) img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => reject(new Error('image failed to load'))
     img.src = src
@@ -67,146 +104,80 @@ function coverCrop(naturalW: number, naturalH: number, targetW: number, targetH:
   return { sx: 0, sy: (naturalH - sh) / 2, sw: naturalW, sh }
 }
 
-const PIXEL_RATIO = 2
-const PHOTO_BORDER = 3
-const PHOTO_RADIUS = 4
-
-/** Photo slot in canvas pixels — derived from locked card layout constants
- * rather than getBoundingClientRect, so off-screen capture targets and
- * scaled-on-screen previews all agree. */
-function photoSlotRect() {
-  const x = CONTENT_LEFT * PIXEL_RATIO
-  const y = PHOTO_TOP * PIXEL_RATIO
-  const w = PHOTO_W * PIXEL_RATIO
-  const h = PHOTO_H * PIXEL_RATIO
-  const b = PHOTO_BORDER * PIXEL_RATIO
-  return {
-    x: x + b,
-    y: y + b,
-    w: w - b * 2,
-    h: h - b * 2,
-    radius: PHOTO_RADIUS * PIXEL_RATIO,
-  }
-}
-
-function roundRectPath(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  const radius = Math.min(r, w / 2, h / 2)
-  ctx.beginPath()
-  ctx.moveTo(x + radius, y)
-  ctx.arcTo(x + w, y, x + w, y + h, radius)
-  ctx.arcTo(x + w, y + h, x, y + h, radius)
-  ctx.arcTo(x, y + h, x, y, radius)
-  ctx.arcTo(x, y, x + w, y, radius)
-  ctx.closePath()
-}
-
-async function loadPhotoForCapture(
-  photoUrl: string,
-  domImg: HTMLImageElement | null,
-): Promise<HTMLImageElement | null> {
-  const inlined = await toDataUrl(photoUrl)
-  if (inlined) {
-    try {
-      return await loadImage(inlined)
-    } catch {
-      // fall through
-    }
-  }
-
-  if (domImg?.complete && domImg.naturalWidth > 0) {
-    return domImg
-  }
-
-  try {
-    return await loadImage(photoUrl, true)
-  } catch {
-    return null
-  }
-}
-
-function compositePhotoUnderCard(
-  cardCanvas: HTMLCanvasElement,
-  photo: CanvasImageSource,
-) {
-  const out = document.createElement('canvas')
-  out.width = cardCanvas.width
-  out.height = cardCanvas.height
-  const ctx = out.getContext('2d')
-  if (!ctx) return cardCanvas
-
-  const { x, y, w, h, radius } = photoSlotRect()
-  const source = photo as HTMLImageElement
-  const naturalW = 'naturalWidth' in source ? source.naturalWidth : w
-  const naturalH = 'naturalHeight' in source ? source.naturalHeight : h
-  const { sx, sy, sw, sh } = coverCrop(naturalW, naturalH, w, h)
-
-  ctx.save()
-  roundRectPath(ctx, x, y, w, h, radius)
-  ctx.clip()
-  ctx.drawImage(photo, sx, sy, sw, sh, x, y, w, h)
-  ctx.restore()
-
-  // Card chrome (border, badge, text) on top — transparent photo hole shows through.
-  ctx.drawImage(cardCanvas, 0, 0)
-  return out
-}
-
 /**
- * Mobile Safari drops user photos inside html-to-image's foreignObject pass even
- * when they're inlined as data URIs. Desktop is unaffected, so it keeps plain
- * toPng(). On mobile the photo is painted onto a canvas first, then the card
- * (captured with the photo hidden so the slot is transparent) is layered on top.
+ * Desktop keeps plain html-to-image — it already works there.
+ *
+ * Mobile routes around Safari's unreliable embedding of remote user photos in
+ * html-to-image's SVG foreignObject pipeline: capture the card with the photo
+ * slot transparent, then paint the photo onto the canvas with drawImage()
+ * behind the existing pixels (destination-over). Photo bytes come from the
+ * on-device cache when available, otherwise from fetch/API fallback.
  */
 export async function captureCardPng(
   node: HTMLElement,
   photoUrl: string | null | undefined,
   isMobile: boolean,
+  citizenId?: string | null,
 ): Promise<string> {
-  const { toPng, toCanvas } = await import('html-to-image')
-
   if (!isMobile) {
+    const { toPng } = await import('html-to-image')
     return toPng(node, { pixelRatio: PIXEL_RATIO })
   }
 
-  const photoImg = node.querySelector<HTMLImageElement>('img[data-card-photo]')
+  const hasUserPhoto = Boolean(photoUrl || citizenId)
+  const slot = hasUserPhoto
+    ? node.querySelector<HTMLElement>('[data-card-photo-slot]')
+    : null
+  const photoImg = slot?.querySelector<HTMLImageElement>('img[data-card-photo]') ?? null
+  const originalBackground = slot?.style.background ?? ''
+  const originalDisplay = photoImg?.style.display ?? ''
 
-  await Promise.all([waitForImages(node), waitForFonts()])
+  if (slot && photoImg) {
+    slot.style.background = 'transparent'
+    photoImg.style.display = 'none'
+  }
 
-  const photo =
-    photoUrl && photoImg
-      ? await loadPhotoForCapture(photoUrl, photoImg)
-      : null
-
-  node.setAttribute('data-capturing', 'true')
-
-  let cardCanvas: HTMLCanvasElement
+  let canvas: HTMLCanvasElement
   try {
-    cardCanvas = await toCanvas(node, {
-      pixelRatio: PIXEL_RATIO,
-      backgroundColor: 'rgba(0,0,0,0)',
-      cacheBust: true,
-    })
+    await Promise.all([waitForImages(node), waitForFonts()])
+    const { toCanvas } = await import('html-to-image')
+    canvas = await toCanvas(node, { pixelRatio: PIXEL_RATIO })
   } finally {
-    node.removeAttribute('data-capturing')
+    if (slot && photoImg) {
+      slot.style.background = originalBackground
+      photoImg.style.display = originalDisplay
+    }
   }
 
-  if (!photoUrl || !photo) {
-    return cardCanvas.toDataURL('image/png')
+  if (slot && hasUserPhoto) {
+    const photoDataUrl = await resolvePhotoDataUrl(photoUrl, citizenId)
+    if (photoDataUrl) {
+      try {
+        const img = await loadImage(photoDataUrl)
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          const nodeRect = node.getBoundingClientRect()
+          const slotRect = slot.getBoundingClientRect()
+          const scaleX = nodeRect.width / node.offsetWidth || 1
+          const scaleY = nodeRect.height / node.offsetHeight || 1
+          const x = ((slotRect.left - nodeRect.left) / scaleX) * PIXEL_RATIO
+          const y = ((slotRect.top - nodeRect.top) / scaleY) * PIXEL_RATIO
+          const w = (slotRect.width / scaleX) * PIXEL_RATIO
+          const h = (slotRect.height / scaleY) * PIXEL_RATIO
+
+          const { sx, sy, sw, sh } = coverCrop(img.naturalWidth, img.naturalHeight, w, h)
+          ctx.save()
+          ctx.globalCompositeOperation = 'destination-over'
+          ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
+          ctx.restore()
+        }
+      } catch {
+        // best-effort — card still exports without the photo
+      }
+    }
   }
 
-  const result = compositePhotoUnderCard(cardCanvas, photo)
-  try {
-    return result.toDataURL('image/png')
-  } catch {
-    return cardCanvas.toDataURL('image/png')
-  }
+  return canvas.toDataURL('image/png')
 }
 
 export async function downloadCardImage(

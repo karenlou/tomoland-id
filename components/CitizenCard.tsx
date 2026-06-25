@@ -175,6 +175,7 @@ export default function CitizenCard({ citizen, preview }: CitizenCardProps) {
               src={photo_url}
               alt={name ?? 'Citizen photo'}
               data-card-photo="true"
+              crossOrigin="anonymous"
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (

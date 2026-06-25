@@ -992,12 +992,3 @@ body {
     transform: translateY(0);
   }
 }
-
-/* Card PNG capture — hide the live photo so html-to-image leaves a transparent hole */
-[data-capturing='true'] [data-card-photo-slot] {
-  background: transparent !important;
-}
-
-[data-capturing='true'] img[data-card-photo] {
-  display: none !important;
-}

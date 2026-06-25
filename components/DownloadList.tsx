@@ -49,7 +49,12 @@ export default function DownloadList({ citizens }: DownloadListProps) {
     async function run() {
       if (!captureRef.current) return
       try {
-        const dataUrl = await captureCardPng(captureRef.current, target.photo_url, isMobile)
+        const dataUrl = await captureCardPng(
+          captureRef.current,
+          target.photo_url,
+          isMobile,
+          target.id,
+        )
         if (cancelled) return
         await downloadCardImage(dataUrl, downloadFilename(target), isMobile)
       } catch {
