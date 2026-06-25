@@ -173,7 +173,6 @@ export default function CitizenCard({ citizen, preview }: CitizenCardProps) {
             <img
               src={photo_url}
               alt={name ?? 'Citizen photo'}
-              data-card-photo="true"
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (

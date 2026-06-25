@@ -9,7 +9,7 @@
  * fillText() calls, so there's no separate "rendered part" and "composited
  * part" to fall out of sync; it's one output, built as one unit.
  */
-import { CARD_H, CARD_W } from './cardConstants'
+import { CARD_BORDER_RADIUS, CARD_H, CARD_W } from './cardConstants'
 import {
   BLURB_SIZE,
   CONTENT_LEFT,
@@ -159,6 +159,13 @@ export async function renderCardCanvas(citizen: Citizen): Promise<HTMLCanvasElem
 
   await waitForFonts()
 
+  // The live card gets its rounded corners for free from a wrapper div with
+  // borderRadius + overflow:hidden around it — this canvas has no such
+  // wrapper, so the rounding has to be baked in directly, clipping every
+  // draw call below to the card's true outer shape.
+  roundRectPath(ctx, 0, 0, CARD_W, CARD_H, CARD_BORDER_RADIUS)
+  ctx.clip()
+
   // Background
   ctx.fillStyle = CARD_YELLOW
   ctx.fillRect(0, 0, CARD_W, CARD_H)
@@ -206,6 +213,11 @@ export async function renderCardCanvas(citizen: Citizen): Promise<HTMLCanvasElem
   ctx.fillStyle = PHOTO_CREAM
   ctx.fill()
 
+  // The container's overflow:hidden clips at its *padding* edge (inside
+  // the 3px border), and MASCOT_LEFT/MASCOT_TOP — like any absolutely
+  // positioned child's offsets — are measured from that same inner edge,
+  // not the outer border-box. Sharing this one clip+origin for both the
+  // photo and the badge keeps that consistent.
   ctx.save()
   roundRectPath(ctx, innerX, innerY, innerW, innerH, 2)
   ctx.clip()
@@ -222,26 +234,26 @@ export async function renderCardCanvas(citizen: Citizen): Promise<HTMLCanvasElem
       const placeholder = await loadImage('/tomo-character.png')
       const w = 145
       const h = (placeholder.naturalHeight / placeholder.naturalWidth) * w
-      ctx.drawImage(placeholder, slotX + PHOTO_W / 2 - w / 2, slotY + PHOTO_H - 10 - h, w, h)
+      const bottomY = innerY + innerH + 10
+      ctx.drawImage(placeholder, innerX + innerW / 2 - w / 2, bottomY - h, w, h)
     } catch {
       // best-effort
     }
   }
-  ctx.restore()
 
-  // Mascot badge — rotated about its own center, clipped to the outer slot
-  // (the clip from the outer roundRectPath above is still active here)
+  // Mascot badge — rotated about its own center
   try {
     const badge = await loadImage('/party-mascot-badge.svg')
     ctx.save()
-    ctx.translate(slotX + MASCOT_LEFT + MASCOT_W / 2, slotY + MASCOT_TOP + MASCOT_H / 2)
+    ctx.translate(innerX + MASCOT_LEFT + MASCOT_W / 2, innerY + MASCOT_TOP + MASCOT_H / 2)
     ctx.rotate((MASCOT_ROTATE * Math.PI) / 180)
     ctx.drawImage(badge, -MASCOT_W / 2, -MASCOT_H / 2, MASCOT_W, MASCOT_H)
     ctx.restore()
   } catch {
     // best-effort
   }
-  ctx.restore()
+  ctx.restore() // closes the inner-rect clip (line 221)
+  ctx.restore() // closes the outer-rect clip (line 205)
 
   // --- Info column ---
   const infoX = slotX + PHOTO_W + PHOTO_GAP
