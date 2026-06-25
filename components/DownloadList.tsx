@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CitizenCard, { CitizenCardThumbnail } from './CitizenCard'
 import { CARD_BORDER_RADIUS, CARD_H, CARD_W } from '@/lib/cardConstants'
+import { captureCardPng, toDataUrl } from '@/lib/captureCardPng'
 import type { Citizen } from '@/types'
 
 interface DownloadListProps {
@@ -45,8 +46,7 @@ export default function DownloadList({ citizens }: DownloadListProps) {
     async function run() {
       if (!captureRef.current) return
       try {
-        const { toPng } = await import('html-to-image')
-        const dataUrl = await toPng(captureRef.current as HTMLDivElement, { pixelRatio: 2 })
+        const dataUrl = await captureCardPng(captureRef.current)
         if (cancelled) return
         const link = document.createElement('a')
         link.download = downloadTarget ? downloadFilename(downloadTarget) : 'tomoland-id.png'
@@ -68,10 +68,27 @@ export default function DownloadList({ citizens }: DownloadListProps) {
     }
   }, [downloadTarget])
 
-  function handleDownloadClick(citizen: Citizen) {
+  async function handleDownloadClick(citizen: Citizen) {
     if (downloadingId) return
     setDownloadingId(citizen.id)
-    setDownloadTarget(citizen)
+
+    // Inline the photo as a data URI ourselves before mounting the capture
+    // card. html-to-image does its own (separately CORS-gated) fetch of
+    // remote images to embed them — a freshly-mounted, off-screen photo is
+    // exactly the case most likely to still be loading when that runs,
+    // especially over a mobile connection, and is what was producing IDs
+    // with the photo missing. Having the bytes in hand first removes that
+    // race; falling back to the original URL on failure just leaves it as
+    // fragile as before rather than losing the capture entirely.
+    let prepared = citizen
+    if (citizen.photo_url) {
+      const inlined = await toDataUrl(citizen.photo_url)
+      if (inlined) {
+        prepared = { ...citizen, photo_url: inlined }
+      }
+    }
+
+    setDownloadTarget(prepared)
   }
 
   return (
