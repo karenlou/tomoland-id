@@ -5,7 +5,7 @@ import CitizenCard from './CitizenCard'
 import FlippableId from './FlippableId'
 import { IdSleeveShell, getSleeveMetrics } from './IdSleeve'
 import { CARD_H, CARD_W, cardRadiusAtScale, MOBILE_CREATE_SPOTLIGHT_W } from '@/lib/cardConstants'
-import { captureCardPng } from '@/lib/captureCardPng'
+import { captureCardPng, downloadCardImage } from '@/lib/captureCardPng'
 import { playPrinterSound, stopPrinterSound } from '@/lib/clickSound'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { xShareIntentUrl } from '@/lib/xShareTemplate'
@@ -169,10 +169,7 @@ export default function RetroPrinter({ citizen, onComplete }: RetroPrinterProps)
     setDownloading(true)
     try {
       const dataUrl = await captureCardPng(cardRef.current)
-      const link = document.createElement('a')
-      link.download = `${citizen.tomoland_id || 'tomoland-id'}.png`
-      link.href = dataUrl
-      link.click()
+      await downloadCardImage(dataUrl, `${citizen.tomoland_id || 'tomoland-id'}.png`)
       setDownloaded(true)
     } catch {
       // best-effort — leave the card on screen so they can still screenshot it

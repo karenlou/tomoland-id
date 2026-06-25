@@ -14,7 +14,7 @@ import {
   SPOTLIGHT_W,
 } from '@/lib/cardConstants'
 import { useIsMobile } from '@/lib/useIsMobile'
-import { captureCardPng } from '@/lib/captureCardPng'
+import { captureCardPng, downloadCardImage } from '@/lib/captureCardPng'
 import type { Citizen } from '@/types'
 
 /** Slightly smaller than the standard spotlight width, so the card has more
@@ -210,10 +210,7 @@ export default function IdSpotlight({
     setDownloading(true)
     try {
       const dataUrl = await captureCardPng(cardRef.current)
-      const link = document.createElement('a')
-      link.download = `${citizen.tomoland_id || 'tomoland-id'}.png`
-      link.href = dataUrl
-      link.click()
+      await downloadCardImage(dataUrl, `${citizen.tomoland_id || 'tomoland-id'}.png`)
     } catch {
       // best-effort — no on-screen fallback needed here, the card is always visible
     } finally {

@@ -11,7 +11,7 @@
 
 @font-face {
   font-family: 'GT Mechanik Mono Trial';
-  src: url('/fonts/GTMechanikMono-Bold.otf') format('opentype');
+  src: url('/fonts/GT-Mechanik-Mono-Bold-Trial.otf') format('opentype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -19,7 +19,7 @@
 
 @font-face {
   font-family: 'GT Mechanik Mono Trial';
-  src: url('/fonts/GTMechanikMono-Heavy.otf') format('opentype');
+  src: url('/fonts/GT-Mechanik-Mono-Heavy-Trial.otf') format('opentype');
   font-weight: 900;
   font-style: normal;
   font-display: swap;

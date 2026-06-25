@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CitizenCard, { CitizenCardThumbnail } from './CitizenCard'
 import { CARD_BORDER_RADIUS, CARD_H, CARD_W } from '@/lib/cardConstants'
-import { captureCardPng, toDataUrl } from '@/lib/captureCardPng'
+import { captureCardPng, downloadCardImage, toDataUrl } from '@/lib/captureCardPng'
 import type { Citizen } from '@/types'
 
 interface DownloadListProps {
@@ -48,10 +48,10 @@ export default function DownloadList({ citizens }: DownloadListProps) {
       try {
         const dataUrl = await captureCardPng(captureRef.current)
         if (cancelled) return
-        const link = document.createElement('a')
-        link.download = downloadTarget ? downloadFilename(downloadTarget) : 'tomoland-id.png'
-        link.href = dataUrl
-        link.click()
+        await downloadCardImage(
+          dataUrl,
+          downloadTarget ? downloadFilename(downloadTarget) : 'tomoland-id.png',
+        )
       } catch {
         // best-effort — the row's button just stops spinning, nothing else to fall back to
       } finally {
