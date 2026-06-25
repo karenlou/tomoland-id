@@ -40,12 +40,6 @@ async function waitForFonts(): Promise<void> {
   await document.fonts.ready.catch(() => {})
 }
 
-export async function captureCardPng(node: HTMLElement): Promise<string> {
-  await Promise.all([waitForImages(node), waitForFonts()])
-  const { toPng } = await import('html-to-image')
-  return toPng(node, { pixelRatio: 2 })
-}
-
 /** Fetches `url` and returns it as a data URI, so the capture target's <img>
  * never depends on html-to-image's own (separately CORS-gated) fetch of a
  * remote resource — by the time it's assigned, the bytes are already in
@@ -64,6 +58,39 @@ export async function toDataUrl(url: string): Promise<string | null> {
     })
   } catch {
     return null
+  }
+}
+
+/**
+ * `photoUrl` — the citizen's own photo (CitizenCard's `<img data-card-photo>`)
+ * is the one image in the card that's remote and user-supplied, and the one
+ * actually reported missing from captures. Rather than trust html-to-image's
+ * own (separately CORS-gated) fetch of it, this inlines it as a data URI and
+ * swaps it onto the live img *before* capture, then restores the original
+ * src afterward — the swap needs to be temporary since for the main
+ * directory's download button and the post-print download, `node` is the
+ * actual on-screen card, not a disposable off-screen one.
+ */
+export async function captureCardPng(node: HTMLElement, photoUrl?: string | null): Promise<string> {
+  const photoImg = node.querySelector<HTMLImageElement>('img[data-card-photo]')
+  const originalSrc = photoImg?.getAttribute('src') ?? null
+
+  if (photoImg && photoUrl) {
+    const inlined = await toDataUrl(photoUrl)
+    if (inlined) {
+      photoImg.src = inlined
+      await photoImg.decode().catch(() => {})
+    }
+  }
+
+  try {
+    await Promise.all([waitForImages(node), waitForFonts()])
+    const { toPng } = await import('html-to-image')
+    return await toPng(node, { pixelRatio: 2 })
+  } finally {
+    if (photoImg && originalSrc !== null) {
+      photoImg.src = originalSrc
+    }
   }
 }
 

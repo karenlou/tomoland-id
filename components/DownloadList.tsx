@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CitizenCard, { CitizenCardThumbnail } from './CitizenCard'
 import { CARD_BORDER_RADIUS, CARD_H, CARD_W } from '@/lib/cardConstants'
-import { captureCardPng, downloadCardImage, toDataUrl } from '@/lib/captureCardPng'
+import { captureCardPng, downloadCardImage } from '@/lib/captureCardPng'
 import type { Citizen } from '@/types'
 
 interface DownloadListProps {
@@ -41,17 +41,15 @@ export default function DownloadList({ citizens }: DownloadListProps) {
 
   useEffect(() => {
     if (!downloadTarget) return
+    const target = downloadTarget
     let cancelled = false
 
     async function run() {
       if (!captureRef.current) return
       try {
-        const dataUrl = await captureCardPng(captureRef.current)
+        const dataUrl = await captureCardPng(captureRef.current, target.photo_url)
         if (cancelled) return
-        await downloadCardImage(
-          dataUrl,
-          downloadTarget ? downloadFilename(downloadTarget) : 'tomoland-id.png',
-        )
+        await downloadCardImage(dataUrl, downloadFilename(target))
       } catch {
         // best-effort — the row's button just stops spinning, nothing else to fall back to
       } finally {
@@ -68,27 +66,10 @@ export default function DownloadList({ citizens }: DownloadListProps) {
     }
   }, [downloadTarget])
 
-  async function handleDownloadClick(citizen: Citizen) {
+  function handleDownloadClick(citizen: Citizen) {
     if (downloadingId) return
     setDownloadingId(citizen.id)
-
-    // Inline the photo as a data URI ourselves before mounting the capture
-    // card. html-to-image does its own (separately CORS-gated) fetch of
-    // remote images to embed them — a freshly-mounted, off-screen photo is
-    // exactly the case most likely to still be loading when that runs,
-    // especially over a mobile connection, and is what was producing IDs
-    // with the photo missing. Having the bytes in hand first removes that
-    // race; falling back to the original URL on failure just leaves it as
-    // fragile as before rather than losing the capture entirely.
-    let prepared = citizen
-    if (citizen.photo_url) {
-      const inlined = await toDataUrl(citizen.photo_url)
-      if (inlined) {
-        prepared = { ...citizen, photo_url: inlined }
-      }
-    }
-
-    setDownloadTarget(prepared)
+    setDownloadTarget(citizen)
   }
 
   return (
