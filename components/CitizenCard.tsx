@@ -158,6 +158,7 @@ export default function CitizenCard({ citizen, preview }: CitizenCardProps) {
         }}
       >
         <div
+          data-card-photo-slot="true"
           style={{
             position: 'relative',
             width: PHOTO_W,

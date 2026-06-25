@@ -61,37 +61,105 @@ export async function toDataUrl(url: string): Promise<string | null> {
   }
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('image failed to load'))
+    img.src = src
+  })
+}
+
+/** Source rectangle that replicates CSS `object-fit: cover` — crops to the
+ * target's aspect ratio (centered) rather than stretching. */
+function coverCrop(naturalW: number, naturalH: number, targetW: number, targetH: number) {
+  const targetRatio = targetW / targetH
+  const srcRatio = naturalW / naturalH
+  if (srcRatio > targetRatio) {
+    const sw = naturalH * targetRatio
+    return { sx: (naturalW - sw) / 2, sy: 0, sw, sh: naturalH }
+  }
+  const sh = naturalW / targetRatio
+  return { sx: 0, sy: (naturalH - sh) / 2, sw: naturalW, sh }
+}
+
+const PIXEL_RATIO = 2
+
 /**
- * `photoUrl` — the citizen's own photo (CitizenCard's `<img data-card-photo>`)
- * is the one image in the card that's remote and user-supplied, and the one
- * actually reported missing from captures. Rather than trust html-to-image's
- * own (separately CORS-gated) fetch of it, this inlines it as a data URI and
- * swaps it onto the live img *before* capture, then restores the original
- * src afterward — the swap needs to be temporary since for the main
- * directory's download button and the post-print download, `node` is the
- * actual on-screen card, not a disposable off-screen one.
+ * The citizen's own photo is the one image in the card that's remote and
+ * user-supplied, and the one actually reported missing from captures — even
+ * after fully decoding it and inlining it as a data URI beforehand, on some
+ * devices it still doesn't show up. html-to-image rasterizes by serializing
+ * the DOM into an SVG <foreignObject> and drawing that through a fresh
+ * Image; embedding a *user photo* specifically into that pipeline is the
+ * known-unreliable part on Safari/WebKit. Everything else in the card
+ * (text, borders, the rotated mascot badge sticker that overlaps one corner
+ * of the photo) renders fine through it, so this only routes around the
+ * photo: the slot is made transparent for the html-to-image pass, then the
+ * real photo — fetched fresh from wherever it's actually stored (photoUrl,
+ * the same URL the card displays it from normally) — is drawn straight onto
+ * the resulting canvas with a plain drawImage() call, composited *behind*
+ * the existing (opaque) pixels via 'destination-over'. That fills exactly
+ * the transparent hole — i.e. the rounded photo rect minus whatever sliver
+ * of the badge overlaps it — without needing to separately replicate the
+ * border-radius clip or the badge's rotation/clipping math by hand.
  */
 export async function captureCardPng(node: HTMLElement, photoUrl?: string | null): Promise<string> {
-  const photoImg = node.querySelector<HTMLImageElement>('img[data-card-photo]')
-  const originalSrc = photoImg?.getAttribute('src') ?? null
+  const slot = photoUrl ? node.querySelector<HTMLElement>('[data-card-photo-slot]') : null
+  const photoImg = slot?.querySelector<HTMLImageElement>('img[data-card-photo]') ?? null
+  const originalBackground = slot?.style.background ?? ''
+  const originalDisplay = photoImg?.style.display ?? ''
 
-  if (photoImg && photoUrl) {
-    const inlined = await toDataUrl(photoUrl)
-    if (inlined) {
-      photoImg.src = inlined
-      await photoImg.decode().catch(() => {})
-    }
+  if (slot && photoImg) {
+    slot.style.background = 'transparent'
+    photoImg.style.display = 'none'
   }
 
+  let canvas: HTMLCanvasElement
   try {
     await Promise.all([waitForImages(node), waitForFonts()])
-    const { toPng } = await import('html-to-image')
-    return await toPng(node, { pixelRatio: 2 })
+    const { toCanvas } = await import('html-to-image')
+    canvas = await toCanvas(node, { pixelRatio: PIXEL_RATIO })
   } finally {
-    if (photoImg && originalSrc !== null) {
-      photoImg.src = originalSrc
+    if (slot && photoImg) {
+      slot.style.background = originalBackground
+      photoImg.style.display = originalDisplay
     }
   }
+
+  if (slot && photoUrl) {
+    try {
+      const inlined = await toDataUrl(photoUrl)
+      if (inlined) {
+        const img = await loadImage(inlined)
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          const nodeRect = node.getBoundingClientRect()
+          const slotRect = slot.getBoundingClientRect()
+          // Dividing by the *rendered* size rather than assuming pixelRatio
+          // accounts for any CSS scale() on an ancestor — IdSpotlight and
+          // RetroPrinter both display the card scaled down from its native
+          // size, while DownloadList's off-screen capture target doesn't.
+          const scaleX = (nodeRect.width / node.offsetWidth) || 1
+          const scaleY = (nodeRect.height / node.offsetHeight) || 1
+          const x = ((slotRect.left - nodeRect.left) / scaleX) * PIXEL_RATIO
+          const y = ((slotRect.top - nodeRect.top) / scaleY) * PIXEL_RATIO
+          const w = (slotRect.width / scaleX) * PIXEL_RATIO
+          const h = (slotRect.height / scaleY) * PIXEL_RATIO
+
+          const { sx, sy, sw, sh } = coverCrop(img.naturalWidth, img.naturalHeight, w, h)
+          ctx.save()
+          ctx.globalCompositeOperation = 'destination-over'
+          ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
+          ctx.restore()
+        }
+      }
+    } catch {
+      // best-effort — if this fails, the capture still has everything else
+    }
+  }
+
+  return canvas.toDataURL('image/png')
 }
 
 /**
