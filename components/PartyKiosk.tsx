@@ -5,11 +5,8 @@ import CameraCapture, { CAMERA_BODY_W } from './CameraCapture'
 import CitizenCard from './CitizenCard'
 import RoleSlotMachine from './RoleSlotMachine'
 import { supabase } from '@/lib/supabase'
-import { captureCardPng, downloadCardImage } from '@/lib/captureCardPng'
-import { cacheCitizenPhoto } from '@/lib/citizenPhotoCache'
 import { isProfane } from '@/lib/profanity'
 import { normalizeCitizenName } from '@/lib/normalizeCitizenName'
-import { useIsMobile } from '@/lib/useIsMobile'
 import { CARD_BORDER, CARD_H, CARD_W, CARD_SHADOW, PARTY_CARD_H, PARTY_CARD_SCALE, PARTY_CARD_W, cardRadiusAtScale } from '@/lib/cardConstants'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
@@ -99,7 +96,6 @@ function StepActionSlot({ open, children }: { open: boolean; children: React.Rea
 }
 
 export default function PartyKiosk() {
-  const isMobile = useIsMobile()
   const [step, setStep] = useState<Step>('name')
   const [name, setName] = useState('')
   const [role, setRole] = useState<Role | null>(null)
@@ -209,11 +205,7 @@ export default function PartyKiosk() {
 
       if (insertError) throw new Error(insertError.message)
 
-      const citizen = data as Citizen
-      if (photoBlob && citizen.id) {
-        void cacheCitizenPhoto(citizen.id, photoBlob)
-      }
-      setSavedCitizen(citizen)
+      setSavedCitizen(data as Citizen)
       setStep('preview')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong saving your ID.')
@@ -222,20 +214,15 @@ export default function PartyKiosk() {
   }
 
   async function handleDownload() {
-    if (!exportRef.current || !savedCitizen || downloading) return
+    if (!exportRef.current || downloading) return
     setDownloading(true)
     try {
-      const dataUrl = await captureCardPng(
-        exportRef.current,
-        savedCitizen.photo_url,
-        isMobile,
-        savedCitizen.id,
-      )
-      await downloadCardImage(
-        dataUrl,
-        `${sanitizeFilename(name)}-TomolandID.png`,
-        isMobile,
-      )
+      const { toPng } = await import('html-to-image')
+      const dataUrl = await toPng(exportRef.current, { pixelRatio: 1 })
+      const link = document.createElement('a')
+      link.download = `${sanitizeFilename(name)}-TomolandID.png`
+      link.href = dataUrl
+      link.click()
     } catch {
       setError('Download failed — try again.')
     } finally {

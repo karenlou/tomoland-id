@@ -13,7 +13,6 @@ import {
   MOBILE_CREATE_SPOTLIGHT_W,
 } from '@/lib/cardConstants'
 import { getOrCreateDeviceToken, getStoredMyCitizenId } from '@/lib/deviceAuth'
-import { cacheCitizenPhoto } from '@/lib/citizenPhotoCache'
 import { useIsMobile } from '@/lib/useIsMobile'
 import type { Role } from '@/lib/roles'
 import type { Citizen } from '@/types'
@@ -183,12 +182,7 @@ export default function CreatePanel({ onCancel, onIssue }: CreatePanelProps) {
 
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Something went wrong.')
-
-      const citizen = json.citizen as Citizen
-      if (photoBlob && citizen.id) {
-        void cacheCitizenPhoto(citizen.id, photoBlob)
-      }
-      onIssue(citizen)
+      onIssue(json.citizen as Citizen)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
